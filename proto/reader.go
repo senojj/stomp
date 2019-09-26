@@ -14,20 +14,26 @@ type DelimitedReader struct {
 	delimiter byte
 	reader    io.Reader
 	buf       bytes.Buffer
+	done      bool
 }
 
 func (d *DelimitedReader) Read(p []byte) (int, error) {
-	read, rdErr := d.reader.Read(p)
+	if d.done {
+		return 0, io.EOF
+	}
+	buf := make([]byte, cap(p))
+	read, rdErr := d.reader.Read(buf)
 
 	if nil != rdErr {
-		return d.buf.Len(), rdErr
+		return 0, rdErr
 	}
 
-	for _, i := range p {
-		d.buf.WriteByte(i)
+	for i, v := range buf {
+		p[i] = v
 
-		if i == d.delimiter {
-			return d.buf.Len(), io.EOF
+		if v == d.delimiter {
+			d.done = true
+			return i, io.EOF
 		}
 	}
 	return read, rdErr
