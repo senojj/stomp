@@ -1,4 +1,4 @@
-package stomp
+package proto
 
 import (
 	"bytes"
@@ -12,11 +12,7 @@ const frameData = "SEND\ncontent-length:17\n\nsome test content\x00"
 func TestFrame_WriteTo(t *testing.T) {
 	in := bytes.NewBufferString(someTestContent)
 
-	frame := Frame{
-		Command: CmdSend,
-		Header: make(Header),
-		Body: in,
-	}
+	frame := NewFrame(CmdSend, in)
 	var out bytes.Buffer
 	_, wrtErr := frame.WriteTo(&out)
 

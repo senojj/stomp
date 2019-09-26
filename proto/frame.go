@@ -1,4 +1,4 @@
-package stomp
+package proto
 
 import (
 	"io"
@@ -13,7 +13,7 @@ type Frame struct {
 
 func calculateContentLength(r io.Reader) int {
 	if nil != r {
-		v, ok := r.(measurableReader)
+		v, ok := r.(MeasurableReader)
 
 		if ok {
 			return v.Len()
@@ -68,4 +68,12 @@ func (f *Frame) WriteTo(w io.Writer) (int64, error) {
 	written += int64(nullb)
 
 	return written, nil
+}
+
+func NewFrame(command Command, body io.Reader) *Frame {
+	return &Frame{
+		Command: command,
+		Header: make(Header),
+		Body: body,
+	}
 }

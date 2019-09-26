@@ -1,9 +1,34 @@
-package stomp
+package proto
 
 import (
 	"fmt"
 	"io"
+	"strings"
 )
+
+var (
+	encodeReplacements = strings.NewReplacer(
+		"\\", "\\\\",
+		"\r", "\\r",
+		"\n", "\\n",
+		":", "\\c",
+	)
+
+	decodeReplacements = strings.NewReplacer(
+		"\\r", "\r",
+		"\\n", "\n",
+		"\\c", ":",
+		"\\\\", "\\",
+	)
+)
+
+func encode(s string) string {
+	return encodeReplacements.Replace(s)
+}
+
+func decode(s string) string {
+	return decodeReplacements.Replace(s)
+}
 
 const (
 	HdrContentLength = "content-length"
@@ -66,11 +91,11 @@ func (m Header) WriteTo(w io.Writer) (int64, error) {
 
 	for k, v := range m {
 		for _, i := range v {
-			out := fmt.Sprintf("%s:%s\n", k, i)
-			b, werr := w.Write([]byte(out))
+			out := fmt.Sprintf("%s:%s\n", encode(k), encode(i))
+			b, wrtErr := w.Write([]byte(out))
 
-			if nil != werr {
-				return written, fmt.Errorf("problem writing header: %v", werr)
+			if nil != wrtErr {
+				return written, fmt.Errorf("problem writing header: %v", wrtErr)
 			}
 			written = written + int64(b)
 		}

@@ -1,4 +1,4 @@
-package stomp
+package proto
 
 import (
 	"fmt"

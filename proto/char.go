@@ -1,4 +1,4 @@
-package stomp
+package proto
 
 const (
 	charNull    = "\x00"
