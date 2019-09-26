@@ -2,7 +2,7 @@ package stomp
 
 import "io"
 
-type MeasurableReader interface {
+type measurableReader interface {
 	io.Reader
 	Len() int
 }

@@ -2,16 +2,26 @@ package stomp
 
 import (
 	"io"
-)
-
-const (
-	Null = "\x00"
+	"strconv"
 )
 
 type Frame struct {
 	Command Command
 	Header  Header
-	Body    MeasurableReader
+	Body    io.Reader
+}
+
+func calculateContentLength(r io.Reader) int {
+	if nil != r {
+		v, ok := r.(measurableReader)
+
+		if ok {
+			return v.Len()
+		}
+		return -1
+	} else {
+		return 0
+	}
 }
 
 func (f *Frame) WriteTo(w io.Writer) (int64, error) {
@@ -22,15 +32,21 @@ func (f *Frame) WriteTo(w io.Writer) (int64, error) {
 	if nil != cmdWrtErr {
 		return written, cmdWrtErr
 	}
-	written += int64(cmdb)
+	written += cmdb
+
+	contentLength := calculateContentLength(f.Body)
+
+	if contentLength > -1 {
+		f.Header.Set(HdrContentLength, strconv.Itoa(contentLength))
+	}
 	hdrb, hdrWrtErr := f.Header.WriteTo(w)
 
 	if nil != hdrWrtErr {
 		return written, hdrWrtErr
 	}
-	written += int64(hdrb)
+	written += hdrb
 
-	nlb, nlWrtErr := w.Write([]byte("\n"))
+	nlb, nlWrtErr := w.Write([]byte(charNewLine))
 
 	if nil != nlWrtErr {
 		return written, nlWrtErr
@@ -42,9 +58,9 @@ func (f *Frame) WriteTo(w io.Writer) (int64, error) {
 	if nil != bdyWrtErr {
 		return written, bdyWrtErr
 	}
-	written += int64(bdyb)
+	written += bdyb
 
-	nullb, nullWrtErr := w.Write([]byte{0})
+	nullb, nullWrtErr := w.Write([]byte(charNull))
 
 	if nil != nullWrtErr {
 		return written, nullWrtErr

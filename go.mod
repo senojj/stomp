@@ -1,3 +1,3 @@
 module github.com/dynata/stomp
 
-go 1.12
+go 1.13
