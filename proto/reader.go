@@ -32,7 +32,7 @@ func (d *DelimitedReader) Read(p []byte) (int, error) {
 	totalRead := 0
 	buf := make([]byte, 1)
 
-	for i := 0; i < cap(p); i++ {
+	for i := 0; i < len(p); i++ {
 		read, rdErr := d.reader.Read(buf)
 
 		if read < 0 {

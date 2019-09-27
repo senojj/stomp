@@ -27,31 +27,31 @@ func calculateContentLength(r io.Reader) int {
 func (f *Frame) WriteTo(w io.Writer) (int64, error) {
 	var written int64 = 0
 
-	cmdb, cmdWrtErr := f.Command.WriteTo(w)
+	cmdBytes, cmdWrtErr := f.Command.WriteTo(w)
 
 	if nil != cmdWrtErr {
 		return written, cmdWrtErr
 	}
-	written += cmdb
+	written += cmdBytes
 
 	contentLength := calculateContentLength(f.Body)
 
 	if contentLength > -1 {
 		f.Header.Set(HdrContentLength, strconv.Itoa(contentLength))
 	}
-	hdrb, hdrWrtErr := f.Header.WriteTo(w)
+	hdrBytes, hdrWrtErr := f.Header.WriteTo(w)
 
 	if nil != hdrWrtErr {
 		return written, hdrWrtErr
 	}
-	written += hdrb
+	written += hdrBytes
 
-	nlb, nlWrtErr := w.Write([]byte(charNewLine))
+	nullBytes, nullWrtErr := w.Write([]byte(charNewLine))
 
-	if nil != nlWrtErr {
-		return written, nlWrtErr
+	if nil != nullWrtErr {
+		return written, nullWrtErr
 	}
-	written += int64(nlb)
+	written += int64(nullBytes)
 
 	if nil != f.Body {
 		bdyb, bdyWrtErr := io.Copy(w, f.Body)
@@ -62,12 +62,12 @@ func (f *Frame) WriteTo(w io.Writer) (int64, error) {
 		written += bdyb
 	}
 
-	nullb, nullWrtErr := w.Write([]byte(charNull))
+	nullBytes, nullWrtErr = w.Write([]byte(charNull))
 
 	if nil != nullWrtErr {
 		return written, nullWrtErr
 	}
-	written += int64(nullb)
+	written += int64(nullBytes)
 
 	return written, nil
 }
