@@ -5,7 +5,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"strconv"
+)
+
+const (
+	DefaultMaxHeaderBytes = 1 << 20 // 1 MB
 )
 
 type MeasurableReader interface {
@@ -24,22 +29,28 @@ func (d *DelimitedReader) Read(p []byte) (int, error) {
 	if d.done {
 		return 0, io.EOF
 	}
-	buf := make([]byte, cap(p))
-	read, rdErr := d.reader.Read(buf)
+	totalRead := 0
+	buf := make([]byte, 1)
 
-	if nil != rdErr {
-		return 0, rdErr
-	}
+	for i := 0; i < cap(p); i++ {
+		read, rdErr := d.reader.Read(buf)
 
-	for i, v := range buf {
-		p[i] = v
+		if read < 0 {
+			return 0, fmt.Errorf("negative read")
+		}
+		totalRead += read
 
-		if v == d.delimiter {
+		if nil != rdErr {
+			return 0, rdErr
+		}
+		p[i] = buf[0]
+
+		if buf[0] == d.delimiter {
 			d.done = true
 			return i, io.EOF
 		}
 	}
-	return read, rdErr
+	return totalRead, nil
 }
 
 func DelimitReader(r io.Reader, delimiter byte) *DelimitedReader {
@@ -53,24 +64,31 @@ type FrameReader struct {
 	reader *bufio.Reader
 }
 
-func (fr *FrameReader) Read() (*Frame, error) {
-	cmdLine, cmdLineRdErr := fr.reader.ReadBytes(byteNewLine)
+func readCommand(r io.Reader) (Command, error) {
+	cmdReader := io.LimitReader(r, 1024)
+	cmdLineReader := DelimitReader(cmdReader, byteNewLine)
+	cmdLine, cmdLineRdErr := ioutil.ReadAll(cmdLineReader)
 
-	if nil != cmdLineRdErr {
-		return nil, cmdLineRdErr
+	if nil != cmdLineRdErr && io.EOF != cmdLineRdErr {
+		return "", cmdLineRdErr
 	}
 
 	if len(cmdLine) == 0 {
-		return nil, fmt.Errorf("empty command")
+		return "", fmt.Errorf("empty command line")
 	}
-	command := Command(cmdLine)
+	return Command(cmdLine), nil
+}
+
+func readHeader(r io.Reader) (Header, error) {
 	header := make(Header)
+	hdrReader := io.LimitReader(r, DefaultMaxHeaderBytes)
 
 	for {
-		hdrLine, hdrLineErr := fr.reader.ReadBytes(byteNewLine)
+		hdrLineReader := DelimitReader(hdrReader, byteNewLine)
+		hdrLine, hdrLineErr := ioutil.ReadAll(hdrLineReader)
 
-		if nil != hdrLineErr {
-			return nil, cmdLineRdErr
+		if nil != hdrLineErr && io.EOF != hdrLineErr {
+			return nil, hdrLineErr
 		}
 
 		if len(hdrLine) == 0 {
@@ -79,11 +97,25 @@ func (fr *FrameReader) Read() (*Frame, error) {
 		ndx := bytes.IndexByte(hdrLine, byteColon)
 
 		if ndx <= 0 {
-			return nil, fmt.Errorf("malformed header")
+			return nil, fmt.Errorf("malformed header. got %s", string(hdrLine))
 		}
 		name := decode(string(hdrLine[0:ndx]))
-		value := decode(string(hdrLine[:ndx+1]))
+		value := decode(string(hdrLine[ndx+1:]))
 		header.Append(name, value)
+	}
+	return header, nil
+}
+
+func (fr *FrameReader) Read() (*Frame, error) {
+	command, cmdRdErr := readCommand(fr.reader)
+
+	if nil != cmdRdErr {
+		return nil, cmdRdErr
+	}
+	header, hdrRdErr := readHeader(fr.reader)
+
+	if nil != hdrRdErr {
+		return nil, hdrRdErr
 	}
 	contentLengths, hasContentLength := header[HdrContentLength]
 	var body io.Reader
@@ -101,8 +133,8 @@ func (fr *FrameReader) Read() (*Frame, error) {
 
 	return &Frame{
 		Command: command,
-		Header: header,
-		Body: body,
+		Header:  header,
+		Body:    body,
 	}, nil
 }
 
