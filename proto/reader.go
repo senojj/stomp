@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 )
 
 type MeasurableReader interface {
@@ -41,7 +42,7 @@ func (d *DelimitedReader) Read(p []byte) (int, error) {
 	return read, rdErr
 }
 
-func NewDelimitedReader(r io.Reader, delimiter byte) *DelimitedReader {
+func DelimitReader(r io.Reader, delimiter byte) *DelimitedReader {
 	return &DelimitedReader{
 		delimiter: delimiter,
 		reader:    r,
@@ -84,7 +85,25 @@ func (fr *FrameReader) Read() (*Frame, error) {
 		value := decode(string(hdrLine[:ndx+1]))
 		header.Append(name, value)
 	}
-	// TODO: check content length
+	contentLengths, hasContentLength := header[HdrContentLength]
+	var body io.Reader
+
+	if hasContentLength {
+		contentLength, convErr := strconv.ParseInt(contentLengths[0], 10, 64)
+
+		if nil != convErr {
+			return nil, convErr
+		}
+		body = io.LimitReader(fr.reader, contentLength)
+	} else {
+		body = DelimitReader(fr.reader, byteNull)
+	}
+
+	return &Frame{
+		Command: command,
+		Header: header,
+		Body: body,
+	}, nil
 }
 
 func NewFrameReader(r io.Reader) *FrameReader {

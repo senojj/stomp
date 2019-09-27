@@ -12,7 +12,7 @@ const (
 
 func TestDelimitedReader_Read(t *testing.T) {
 	r := strings.NewReader(terminatedTestContent)
-	dr := NewDelimitedReader(r, byteNull)
+	dr := DelimitReader(r, byteNull)
 	p := make([]byte, 1024)
 	read, rdErr := dr.Read(p)
 
