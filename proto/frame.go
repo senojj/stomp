@@ -53,12 +53,14 @@ func (f *Frame) WriteTo(w io.Writer) (int64, error) {
 	}
 	written += int64(nlb)
 
-	bdyb, bdyWrtErr := io.Copy(w, f.Body)
+	if nil != f.Body {
+		bdyb, bdyWrtErr := io.Copy(w, f.Body)
 
-	if nil != bdyWrtErr {
-		return written, bdyWrtErr
+		if nil != bdyWrtErr {
+			return written, bdyWrtErr
+		}
+		written += bdyb
 	}
-	written += bdyb
 
 	nullb, nullWrtErr := w.Write([]byte(charNull))
 
