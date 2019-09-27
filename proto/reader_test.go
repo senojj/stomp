@@ -10,21 +10,36 @@ import (
 
 const (
 	terminatedTestContent = "some test content\x00 is what this is"
+	completeTestContent = "some test content is what this is"
 )
 
 func TestDelimitedReader_Read(t *testing.T) {
 	r := strings.NewReader(terminatedTestContent)
 	dr := DelimitReader(r, byteNull)
-	p := make([]byte, 1024)
-	read, rdErr := dr.Read(p)
+	read, rdErr := ioutil.ReadAll(dr)
 
 	if nil != rdErr && rdErr != io.EOF {
 		t.Error(rdErr)
 	}
-	value := string(p[:read])
+	value := string(read)
 
 	if "some test content" != value {
 		t.Errorf("bad read. expected `%s`, got `%s`", "some test content", value)
+	}
+}
+
+func TestDelimitedReader_Read2(t *testing.T) {
+	r := strings.NewReader(completeTestContent)
+	dr := DelimitReader(r, byteNull)
+	read, rdErr := ioutil.ReadAll(dr)
+
+	if nil != rdErr && rdErr != io.EOF {
+		t.Error(rdErr)
+	}
+	value := string(read)
+
+	if completeTestContent != value {
+		t.Errorf("bad read. expected `%s`, got `%s`", completeTestContent, value)
 	}
 }
 

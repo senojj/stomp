@@ -40,14 +40,17 @@ func (d *DelimitedReader) Read(p []byte) (int, error) {
 		}
 		totalRead += read
 
-		if nil != rdErr {
-			return 0, rdErr
-		}
-		p[i] = buf[0]
+		if read > 0 {
+			p[i] = buf[0]
 
-		if buf[0] == d.delimiter {
-			d.done = true
-			return i, io.EOF
+			if buf[0] == d.delimiter {
+				d.done = true
+				return i, io.EOF
+			}
+		}
+
+		if nil != rdErr {
+			return i, rdErr
 		}
 	}
 	return totalRead, nil
