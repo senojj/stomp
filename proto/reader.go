@@ -126,7 +126,9 @@ func (fr *FrameReader) Read() (*Frame, error) {
 		if nil != convErr {
 			return nil, convErr
 		}
-		body = io.LimitReader(fr.reader, contentLength)
+		contentLengthReader := io.LimitReader(fr.reader, contentLength)
+		nullTerminatedReader := DelimitReader(fr.reader, byteNull)
+		body = io.MultiReader(contentLengthReader, nullTerminatedReader)
 	} else {
 		body = DelimitReader(fr.reader, byteNull)
 	}
