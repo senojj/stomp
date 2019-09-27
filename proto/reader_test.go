@@ -10,28 +10,51 @@ import (
 
 const (
 	terminatedTestContent = "some test content\x00 is what this is"
-	completeTestContent = "some test content is what this is"
+	shortTestContent      = "some test content"
+	completeTestContent   = "some test content is what this is"
 )
+
+func readAllSized(r io.Reader, size int) ([]byte, error) {
+	totalBytes := make([]byte, 0)
+	buf := make([]byte, size)
+
+	for {
+		read, rdErr := r.Read(buf)
+
+		if read > 0 {
+			totalBytes = append(totalBytes, buf[:read]...)
+		}
+
+		if nil != rdErr {
+
+			if io.EOF == rdErr {
+				break
+			}
+			return totalBytes, rdErr
+		}
+	}
+	return totalBytes, nil
+}
 
 func TestDelimitedReader_Read(t *testing.T) {
 	r := strings.NewReader(terminatedTestContent)
 	dr := DelimitReader(r, byteNull)
-	read, rdErr := ioutil.ReadAll(dr)
+	read, rdErr := readAllSized(dr, 1)
 
 	if nil != rdErr && rdErr != io.EOF {
 		t.Error(rdErr)
 	}
 	value := string(read)
 
-	if "some test content" != value {
-		t.Errorf("bad read. expected `%s`, got `%s`", "some test content", value)
+	if shortTestContent != value {
+		t.Errorf("bad read. expected `%s`, got `%s`", shortTestContent, value)
 	}
 }
 
 func TestDelimitedReader_Read2(t *testing.T) {
 	r := strings.NewReader(completeTestContent)
 	dr := DelimitReader(r, byteNull)
-	read, rdErr := ioutil.ReadAll(dr)
+	read, rdErr := readAllSized(dr, 1)
 
 	if nil != rdErr && rdErr != io.EOF {
 		t.Error(rdErr)
