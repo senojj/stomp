@@ -67,7 +67,7 @@ func TestFrameReader_Read(t *testing.T) {
 	}
 
 	if frm1.Command != CmdConnect {
-		t.Fatalf("wrong frame command. expected %s, got %s.", CmdConnect, frm1.Command)
+		t.Fatalf("wrong frame command. expected %s, got %s", CmdConnect, frm1.Command)
 	}
 
 	bdyConnBytes, bdyConnRdErr := ioutil.ReadAll(frm1.Body)
@@ -79,6 +79,28 @@ func TestFrameReader_Read(t *testing.T) {
 	bdyConnStr := string(bdyConnBytes)
 
 	if "hello world!" != bdyConnStr {
-		t.Fatalf("wrong frame body. expected %s, got %s.", "hello world!", bdyConnStr)
+		t.Fatalf("wrong frame body. expected %s, got %s", "hello world!", bdyConnStr)
+	}
+
+	frm2, frm2RdErr := frmReader.Read()
+
+	if nil != frm2RdErr {
+		t.Fatal(frm2RdErr)
+	}
+
+	if frm2.Command != CmdSend {
+		t.Fatalf("wrong frame command. expected %v, got %v", []byte(CmdSend), []byte(frm2.Command))
+	}
+
+	bdySendBytes, bdySendRdErr := ioutil.ReadAll(frm2.Body)
+
+	if nil != bdySendRdErr {
+		t.Fatal(bdySendRdErr)
+	}
+
+	bdySendStr := string(bdySendBytes)
+
+	if "I'm sending this to you" != bdySendStr {
+		t.Fatalf("wrong frame body. expected %s, got %s", "I'm sending this to you", bdySendStr)
 	}
 }
