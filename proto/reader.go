@@ -93,11 +93,6 @@ func stripCarriageReturn(b []byte) []byte {
 	return b[:ndx]
 }
 
-type readResult struct {
-	Content []byte
-	Error   error
-}
-
 func readCommand(r io.Reader) (Command, error) {
 		cmdReader := io.LimitReader(r, 1024)
 		cmdLineReader := DelimitReader(cmdReader, byteNewLine)
