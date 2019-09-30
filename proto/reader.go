@@ -3,6 +3,7 @@ package proto
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -84,19 +85,37 @@ type FrameReader struct {
 	reader *bufio.Reader
 }
 
+func stripCarriageReturn(b []byte) []byte {
+	ndx := bytes.LastIndexByte(b, byteCarriageReturn)
+
+	if ndx < 0 {
+		return b
+	}
+	return b[:ndx]
+}
+
+type readResult struct {
+	Content []byte
+	Error   error
+}
+
 func readCommand(r io.Reader) (Command, error) {
-	cmdReader := io.LimitReader(r, 1024)
-	cmdLineReader := DelimitReader(cmdReader, byteNewLine)
-	cmdLine, cmdLineRdErr := ioutil.ReadAll(cmdLineReader)
+	for {
+		cmdReader := io.LimitReader(r, 1024)
+		cmdLineReader := DelimitReader(cmdReader, byteNewLine)
+		cmdLine, cmdLineRdErr := ioutil.ReadAll(cmdLineReader)
 
-	if nil != cmdLineRdErr && io.EOF != cmdLineRdErr {
-		return "", cmdLineRdErr
-	}
+		cmdLine = stripCarriageReturn(cmdLine)
 
-	if len(cmdLine) == 0 {
-		return "", fmt.Errorf("empty command line")
+		if nil != cmdLineRdErr && io.EOF != cmdLineRdErr {
+			return "", cmdLineRdErr
+		}
+
+		if len(cmdLine) == 0 {
+			continue
+		}
+		return Command(cmdLine), nil
 	}
-	return Command(cmdLine), nil
 }
 
 func readHeader(r io.Reader) (Header, error) {
@@ -110,6 +129,7 @@ func readHeader(r io.Reader) (Header, error) {
 		if nil != hdrLineErr && io.EOF != hdrLineErr {
 			return nil, hdrLineErr
 		}
+		hdrLine = stripCarriageReturn(hdrLine)
 
 		if len(hdrLine) == 0 {
 			break
@@ -117,7 +137,7 @@ func readHeader(r io.Reader) (Header, error) {
 		ndx := bytes.IndexByte(hdrLine, byteColon)
 
 		if ndx <= 0 {
-			return nil, fmt.Errorf("malformed header. got %s", string(hdrLine))
+			return nil, fmt.Errorf("malformed header. got %v", hdrLine)
 		}
 		name := decode(string(hdrLine[0:ndx]))
 		value := decode(string(hdrLine[ndx+1:]))
@@ -126,13 +146,14 @@ func readHeader(r io.Reader) (Header, error) {
 	return header, nil
 }
 
-func (fr *FrameReader) Read() (*ServerFrame, error) {
-	command, cmdRdErr := readCommand(fr.reader)
+func (fr *FrameReader) Read(ctx context.Context) (*ServerFrame, error) {
+	nullTerminatedReader := DelimitReader(fr.reader, byteNull)
+	command, cmdRdErr := readCommand(nullTerminatedReader)
 
 	if nil != cmdRdErr {
 		return nil, cmdRdErr
 	}
-	header, hdrRdErr := readHeader(fr.reader)
+	header, hdrRdErr := readHeader(nullTerminatedReader)
 
 	if nil != hdrRdErr {
 		return nil, hdrRdErr
@@ -146,11 +167,9 @@ func (fr *FrameReader) Read() (*ServerFrame, error) {
 		if nil != convErr {
 			return nil, convErr
 		}
-		contentLengthReader := io.LimitReader(fr.reader, contentLength)
-		nullTerminatedReader := DelimitReader(fr.reader, byteNull)
-		body = io.MultiReader(contentLengthReader, nullTerminatedReader)
+		body = io.LimitReader(nullTerminatedReader, contentLength)
 	} else {
-		body = DelimitReader(fr.reader, byteNull)
+		body = nullTerminatedReader
 	}
 
 	return &ServerFrame{

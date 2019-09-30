@@ -1,6 +1,7 @@
 package stomp
 
 import (
+	"context"
 	"fmt"
 	"github.com/dynata/stomp/proto"
 	"io/ioutil"
@@ -31,6 +32,12 @@ func WithCredentials(login, passcode string) func(Option) {
 	}
 }
 
+func WithHeartBeat(tx, rx int) func(Option) {
+	return func(option Option) {
+		option.Set(proto.HdrHeartBeat, strconv.Itoa(tx) + "," + strconv.Itoa(rx))
+	}
+}
+
 func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	host, _, splitErr := net.SplitHostPort(c.RemoteAddr().String())
 
@@ -40,7 +47,7 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	frame := proto.NewFrame(proto.CmdConnect, nil)
 
 	frame.Header.Set(proto.HdrHost, host)
-	frame.Header.Set(proto.HdrAcceptVersion, "1.0,1.1")
+	frame.Header.Set(proto.HdrAcceptVersion, "1.1,1.2")
 	frame.Header.Set(proto.HdrHeartBeat, "0,0")
 
 	for _, option := range options {
@@ -53,12 +60,12 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	}
 	frameReader := proto.NewFrameReader(c)
 
-	respFrame, frameRdErr := frameReader.Read()
-	defer respFrame.Body.Close()
+	respFrame, frameRdErr := frameReader.Read(context.Background())
 
 	if nil != frameRdErr {
 		return nil, frameRdErr
 	}
+	defer respFrame.Body.Close()
 
 	if respFrame.Command == proto.CmdError {
 		contentType, ok := respFrame.Header.Get(proto.HdrContentType)
@@ -90,7 +97,7 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	if !ok {
 		heartBeat = "0,0"
 	}
-	rx, tx, hbErr := splitHeartBeat(heartBeat)
+	tx, rx, hbErr := splitHeartBeat(heartBeat)
 
 	if nil != hbErr {
 		return nil, hbErr
@@ -112,15 +119,15 @@ func splitHeartBeat(value string) (int, int, error) {
 	if len(beats) < 2 {
 		return 0, 0, fmt.Errorf("malformed heart beat header: invalid length")
 	}
-	rx, rxErr := strconv.Atoi(beats[0])
-
-	if nil != rxErr {
-		return 0, 0, fmt.Errorf("malformed rx heart beat header value: %v", rxErr)
-	}
-	tx, txErr := strconv.Atoi(beats[1])
+	tx, txErr := strconv.Atoi(beats[0])
 
 	if nil != txErr {
-		return 0, 0, fmt.Errorf("malformed tx heart beat header value: %v", txErr)
+		return 0, 0, fmt.Errorf("malformed rx heart beat header value: %v", txErr)
 	}
-	return rx, tx, nil
+	rx, rxErr := strconv.Atoi(beats[1])
+
+	if nil != rxErr {
+		return 0, 0, fmt.Errorf("malformed tx heart beat header value: %v", rxErr)
+	}
+	return tx, rx, nil
 }
