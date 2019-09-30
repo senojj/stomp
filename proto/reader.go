@@ -3,7 +3,6 @@ package proto
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -100,7 +99,6 @@ type readResult struct {
 }
 
 func readCommand(r io.Reader) (Command, error) {
-	for {
 		cmdReader := io.LimitReader(r, 1024)
 		cmdLineReader := DelimitReader(cmdReader, byteNewLine)
 		cmdLine, cmdLineRdErr := ioutil.ReadAll(cmdLineReader)
@@ -112,10 +110,9 @@ func readCommand(r io.Reader) (Command, error) {
 		}
 
 		if len(cmdLine) == 0 {
-			continue
+			return "", nil
 		}
 		return Command(cmdLine), nil
-	}
 }
 
 func readHeader(r io.Reader) (Header, error) {
@@ -146,12 +143,16 @@ func readHeader(r io.Reader) (Header, error) {
 	return header, nil
 }
 
-func (fr *FrameReader) Read(ctx context.Context) (*ServerFrame, error) {
+func (fr *FrameReader) Read() (*ServerFrame, error) {
 	nullTerminatedReader := DelimitReader(fr.reader, byteNull)
 	command, cmdRdErr := readCommand(nullTerminatedReader)
 
 	if nil != cmdRdErr {
 		return nil, cmdRdErr
+	}
+
+	if "" == command {
+		return nil, nil
 	}
 	header, hdrRdErr := readHeader(nullTerminatedReader)
 
@@ -167,7 +168,8 @@ func (fr *FrameReader) Read(ctx context.Context) (*ServerFrame, error) {
 		if nil != convErr {
 			return nil, convErr
 		}
-		body = io.LimitReader(nullTerminatedReader, contentLength)
+		contentLengthReader := io.LimitReader(fr.reader, contentLength)
+		body = io.MultiReader(contentLengthReader, nullTerminatedReader)
 	} else {
 		body = nullTerminatedReader
 	}

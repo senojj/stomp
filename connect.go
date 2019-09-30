@@ -1,7 +1,6 @@
 package stomp
 
 import (
-	"context"
 	"fmt"
 	"github.com/dynata/stomp/proto"
 	"io/ioutil"
@@ -60,7 +59,7 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	}
 	frameReader := proto.NewFrameReader(c)
 
-	respFrame, frameRdErr := frameReader.Read(context.Background())
+	respFrame, frameRdErr := frameReader.Read()
 
 	if nil != frameRdErr {
 		return nil, frameRdErr

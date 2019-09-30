@@ -69,7 +69,7 @@ func TestDelimitedReader_Read2(t *testing.T) {
 func TestFrameReader_Read(t *testing.T) {
 	var frames bytes.Buffer
 	var bdyConn bytes.Buffer
-	_, bdyConnWrtErr := bdyConn.WriteString("hello world!")
+	_, bdyConnWrtErr := bdyConn.WriteString(terminatedTestContent)
 
 	if nil != bdyConnWrtErr {
 		t.Fatal(bdyConnWrtErr)
@@ -116,8 +116,8 @@ func TestFrameReader_Read(t *testing.T) {
 
 	bdyConnStr := string(bdyConnBytes)
 
-	if "hello world!" != bdyConnStr {
-		t.Fatalf("wrong frame body. expected %s, got %s", "hello world!", bdyConnStr)
+	if terminatedTestContent != bdyConnStr {
+		t.Fatalf("wrong frame body. expected %s, got %s", terminatedTestContent, bdyConnStr)
 	}
 
 	frm2, frm2RdErr := frmReader.Read()
