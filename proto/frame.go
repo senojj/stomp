@@ -5,7 +5,13 @@ import (
 	"strconv"
 )
 
-type Frame struct {
+type ServerFrame struct {
+	Command Command
+	Header  Header
+	Body    io.ReadCloser
+}
+
+type ClientFrame struct {
 	Command Command
 	Header  Header
 	Body    io.Reader
@@ -24,7 +30,7 @@ func calculateContentLength(r io.Reader) int {
 	}
 }
 
-func (f *Frame) WriteTo(w io.Writer) (int64, error) {
+func (f *ClientFrame) WriteTo(w io.Writer) (int64, error) {
 	var written int64 = 0
 
 	cmdBytes, cmdWrtErr := f.Command.WriteTo(w)
@@ -72,10 +78,10 @@ func (f *Frame) WriteTo(w io.Writer) (int64, error) {
 	return written, nil
 }
 
-func NewFrame(command Command, body io.Reader) *Frame {
-	return &Frame{
+func NewFrame(command Command, body io.Reader) *ClientFrame {
+	return &ClientFrame{
 		Command: command,
-		Header: make(Header),
-		Body: body,
+		Header:  make(Header),
+		Body:    body,
 	}
 }

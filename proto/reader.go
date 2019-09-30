@@ -18,6 +18,23 @@ type MeasurableReader interface {
 	Len() int
 }
 
+type flushCloser struct {
+	io.Reader
+}
+
+func (fc *flushCloser) Close() error {
+	_, err := ioutil.ReadAll(fc)
+
+	if nil != err && io.EOF != err {
+		return err
+	}
+	return nil
+}
+
+func FlushCloser(r io.Reader) io.ReadCloser {
+	return &flushCloser{r}
+}
+
 type DelimitedReader struct {
 	delimiter byte
 	reader    io.Reader
@@ -109,7 +126,7 @@ func readHeader(r io.Reader) (Header, error) {
 	return header, nil
 }
 
-func (fr *FrameReader) Read() (*Frame, error) {
+func (fr *FrameReader) Read() (*ServerFrame, error) {
 	command, cmdRdErr := readCommand(fr.reader)
 
 	if nil != cmdRdErr {
@@ -136,10 +153,10 @@ func (fr *FrameReader) Read() (*Frame, error) {
 		body = DelimitReader(fr.reader, byteNull)
 	}
 
-	return &Frame{
+	return &ServerFrame{
 		Command: command,
 		Header:  header,
-		Body:    body,
+		Body:    FlushCloser(body),
 	}, nil
 }
 

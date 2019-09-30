@@ -70,16 +70,16 @@ func (m Header) Set(key string, value string) {
 	m[key] = []string{value}
 }
 
-func (m Header) Get(key string) string {
+func (m Header) Get(key string) (string, bool) {
 	if m == nil {
-		return ""
+		return "", false
 	}
-	v := m[key]
+	v, ok := m[key]
 
 	if len(v) == 0 {
-		return ""
+		return "", ok
 	}
-	return v[0]
+	return v[0], ok
 }
 
 func (m Header) Del(key string) {
