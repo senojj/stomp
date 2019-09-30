@@ -9,6 +9,43 @@ import (
 	"strings"
 )
 
+type input struct {
+	Frame *proto.ServerFrame
+	Err   error
+}
+
+type ingestion struct {
+	C    <-chan input
+	done chan struct{}
+}
+
+func (i ingestion) Stop() {
+	select {
+	case i.done <- struct{}{}:
+	default:
+	}
+}
+
+func ingest(r proto.FrameReader) ingestion {
+	ch := make(chan input)
+	done := make(chan struct{}, 1)
+
+	go func() {
+
+	loop:
+		for {
+			frame, err := r.Read()
+
+			select {
+			case ch <- input{frame, err}:
+			case <-done:
+				break loop
+			}
+		}
+	}()
+	return ingestion{C: ch, done: done}
+}
+
 type Session struct {
 	version     string
 	id          string
@@ -16,6 +53,17 @@ type Session struct {
 	connection  net.Conn
 	txHeartBeat int
 	rxHeartBeat int
+}
+
+func (s *Session) String() string {
+	return fmt.Sprintf(
+		"{Version: %s, ID: %s, Server: %s, TxHeartBeat: %d, RxHeartBeat: %d}",
+		s.version,
+		s.id,
+		s.server,
+		s.txHeartBeat,
+		s.rxHeartBeat,
+	)
 }
 
 type Option proto.Header
@@ -33,7 +81,7 @@ func WithCredentials(login, passcode string) func(Option) {
 
 func WithHeartBeat(tx, rx int) func(Option) {
 	return func(option Option) {
-		option.Set(proto.HdrHeartBeat, strconv.Itoa(tx) + "," + strconv.Itoa(rx))
+		option.Set(proto.HdrHeartBeat, strconv.Itoa(tx)+","+strconv.Itoa(rx))
 	}
 }
 
@@ -102,10 +150,10 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 		return nil, hbErr
 	}
 	session := Session{
-		version: version,
-		id: sessionId,
-		server: server,
-		connection: c,
+		version:     version,
+		id:          sessionId,
+		server:      server,
+		connection:  c,
 		txHeartBeat: tx,
 		rxHeartBeat: rx,
 	}
