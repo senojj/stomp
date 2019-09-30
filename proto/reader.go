@@ -138,6 +138,16 @@ func readHeader(r io.Reader) (Header, error) {
 	return header, nil
 }
 
+// Read will read an entire frame from the internal reader
+// as a ServerFrame. The frame command line and header lines
+// are restricted to specified sizes to guard against malicious
+// frame writes. The frame body is left unread on the stream,
+// and can be read up until either the content length (when specified)
+// is reached, or a null character is encountered. The body of
+// a ServerFrame must be explicitly closed by the reader in order
+// to remove the frame's contents from the stream prior to the next
+// read. A return value of (nil, nil) indicates that a heart-beat
+// was received.
 func (fr *FrameReader) Read() (*ServerFrame, error) {
 	nullTerminatedReader := DelimitReader(fr.reader, byteNull)
 	command, cmdRdErr := readCommand(nullTerminatedReader)
