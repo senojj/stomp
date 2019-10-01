@@ -23,3 +23,15 @@ func WithHeartBeat(tx, rx int) func(Option) {
 		option.Set(proto.HdrHeartBeat, strconv.Itoa(tx)+","+strconv.Itoa(rx))
 	}
 }
+
+func WithContentType(typ string) func(Option) {
+	return func(option Option) {
+		option.Set(proto.HdrContentType, typ)
+	}
+}
+
+func WithReceipt(id string) func(Option) {
+	return func(option Option) {
+		option.Set(proto.HdrReceipt, id)
+	}
+}

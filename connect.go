@@ -1,22 +1,107 @@
 package stomp
 
 import (
+	"context"
 	"fmt"
 	"github.com/dynata/stomp/proto"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 )
+
+type processor struct {
+	C    chan<- writeRequest
+	done chan struct{}
+	wg   sync.WaitGroup
+}
+
+func (i *processor) Close() error {
+	select {
+	case i.done <- struct{}{}:
+	default:
+	}
+	i.wg.Wait()
+	return nil
+}
+
+func process(tx chan<- writeRequest, reader *proto.FrameReader) *processor {
+	ch := make(chan writeRequest)
+	done := make(chan struct{})
+	receipts := make(map[string]chan<- error)
+	var wg sync.WaitGroup
+
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+
+	loop:
+		for {
+			frame, rdErr := reader.Read()
+
+			if nil != rdErr {
+				log.Println(rdErr)
+			}
+
+			if nil != frame {
+				switch frame.Command {
+				case proto.CmdReceipt:
+					id, ok := frame.Header.Get(proto.HdrReceiptId)
+
+					if ok {
+						receipts[id] <- nil
+						delete(receipts, id)
+					} else {
+						log.Printf("error: stomp: unknown receipt-id: %s", id)
+					}
+					frame.Body.Close()
+				case proto.CmdError:
+					id, ok := frame.Header.Get(proto.HdrReceiptId)
+					content, rdErr := ioutil.ReadAll(frame.Body)
+
+					if nil != rdErr {
+						log.Println(rdErr)
+						continue
+					}
+
+					if ok {
+						receipts[id] <- fmt.Errorf(string(content))
+						delete(receipts, id)
+					} else {
+						log.Printf(string(content))
+					}
+					frame.Body.Close()
+				}
+			}
+
+			select {
+			case wr := <-ch:
+				id, ok := wr.Frame.Header.Get(proto.HdrReceipt)
+
+				if ok {
+					receipts[id] = wr.C
+					tx <- wr
+				} else {
+					tx <- wr
+				}
+			case <-done:
+				break loop
+			}
+		}
+	}()
+	return &processor{C: ch, done: done}
+}
 
 type Session struct {
 	version     string
 	id          string
 	server      string
 	connection  net.Conn
-	consumer    *consumer
 	producer    *producer
+	processor   *processor
 	txHeartBeat int
 	rxHeartBeat int
 }
@@ -32,11 +117,42 @@ func (s *Session) String() string {
 	)
 }
 
-func (s *Session) Send(destination string, content io.Reader, options ...func(Option)) error {
+func (s *Session) Send(ctx context.Context, destination string, content io.Reader, options ...func(Option)) error {
 	frame := proto.NewFrame(proto.CmdSend, content)
 
 	for _, option := range options {
 		option(Option(frame.Header))
+	}
+	frame.Header.Set(proto.HdrDestination, destination)
+	ch := make(chan error, 1)
+
+	req := writeRequest{frame, ch}
+
+	select {
+	case s.processor.C <- req:
+		select {
+		case result := <-ch:
+			if nil != result {
+				return result
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	_, ok := frame.Header.Get(proto.HdrReceipt)
+
+	if !ok {
+		return nil
+	}
+
+	select {
+	case result := <-ch:
+		return result
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -104,8 +220,8 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	if nil != hbErr {
 		return nil, hbErr
 	}
-	cons := consume(frameReader)
 	prod := produce(c)
+	proc := process(prod.C, frameReader)
 
 	session := Session{
 		version:     version,
@@ -114,8 +230,8 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 		connection:  c,
 		txHeartBeat: tx,
 		rxHeartBeat: rx,
-		consumer:    cons,
 		producer:    prod,
+		processor:   proc,
 	}
 	return &session, nil
 }

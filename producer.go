@@ -6,14 +6,14 @@ import (
 	"sync"
 )
 
+type writeRequest struct {
+	Frame *proto.ClientFrame
+	C     chan<- error
+}
+
 type writeResult struct {
 	Written int64
 	Err     error
-}
-
-type writeRequest struct {
-	Frame proto.ClientFrame
-	C     chan<- writeResult
 }
 
 type producer struct {
@@ -47,8 +47,8 @@ func produce(w io.Writer) *producer {
 				if !ok {
 					break loop
 				}
-				written, err := req.Frame.WriteTo(w)
-				req.C <- writeResult{written, err}
+				_, err := req.Frame.WriteTo(w)
+				req.C <- err
 			case <-done:
 				break loop
 			}

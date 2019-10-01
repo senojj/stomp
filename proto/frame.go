@@ -1,6 +1,7 @@
 package proto
 
 import (
+	"fmt"
 	"io"
 	"strconv"
 )
@@ -9,6 +10,10 @@ type ServerFrame struct {
 	Command Command
 	Header  Header
 	Body    io.ReadCloser
+}
+
+func (sf *ServerFrame) String() string {
+	return fmt.Sprintf("{Command: %s, Header: %v}", sf.Command, sf.Header)
 }
 
 type ClientFrame struct {

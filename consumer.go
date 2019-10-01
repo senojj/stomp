@@ -2,6 +2,7 @@ package stomp
 
 import (
 	"github.com/dynata/stomp/proto"
+	"log"
 	"sync"
 )
 
@@ -38,6 +39,11 @@ func consume(r *proto.FrameReader) *consumer {
 		for {
 			frame, err := r.Read()
 
+			if nil != frame {
+				log.Printf(frame.String())
+			} else {
+				log.Printf("<nil>")
+			}
 			select {
 			case ch <- readResult{frame, err}:
 			case <-done:
