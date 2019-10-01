@@ -13,6 +13,11 @@ import (
 	"sync"
 )
 
+type writeRequest struct {
+	Frame *proto.ClientFrame
+	C     chan<- error
+}
+
 type processor struct {
 	C    chan<- writeRequest
 	done chan struct{}
@@ -28,7 +33,7 @@ func (i *processor) Close() error {
 	return nil
 }
 
-func process(tx chan<- writeRequest, reader *proto.FrameReader) *processor {
+func process(writer io.Writer, reader *proto.FrameReader) *processor {
 	ch := make(chan writeRequest)
 	done := make(chan struct{})
 	receipts := make(map[string]chan<- error)
@@ -83,10 +88,9 @@ func process(tx chan<- writeRequest, reader *proto.FrameReader) *processor {
 
 				if ok {
 					receipts[id] = wr.C
-					tx <- wr
-				} else {
-					tx <- wr
 				}
+				_, wrErr := wr.Frame.WriteTo(writer)
+				wr.C <- wrErr
 			case <-done:
 				break loop
 			}
@@ -100,7 +104,6 @@ type Session struct {
 	id          string
 	server      string
 	connection  net.Conn
-	producer    *producer
 	processor   *processor
 	txHeartBeat int
 	rxHeartBeat int
@@ -220,8 +223,7 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	if nil != hbErr {
 		return nil, hbErr
 	}
-	prod := produce(c)
-	proc := process(prod.C, frameReader)
+	proc := process(c, frameReader)
 
 	session := Session{
 		version:     version,
@@ -230,7 +232,6 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 		connection:  c,
 		txHeartBeat: tx,
 		rxHeartBeat: rx,
-		producer:    prod,
 		processor:   proc,
 	}
 	return &session, nil
