@@ -35,7 +35,7 @@ func (i *processor) Close() error {
 
 func process(writer io.Writer, reader *proto.FrameReader) *processor {
 	ch := make(chan writeRequest)
-	done := make(chan struct{})
+	done := make(chan struct{}, 1)
 	receipts := make(map[string]chan<- error)
 	var wg sync.WaitGroup
 
