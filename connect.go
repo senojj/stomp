@@ -3,56 +3,117 @@ package stomp
 import (
 	"fmt"
 	"github.com/dynata/stomp/proto"
+	"io"
 	"io/ioutil"
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 )
 
-type input struct {
+type writeResult struct {
+	Written int64
+	Err     error
+}
+
+type writeRequest struct {
+	Frame proto.ClientFrame
+	C     chan<- writeResult
+}
+
+type readResult struct {
 	Frame *proto.ServerFrame
 	Err   error
 }
 
-type ingestion struct {
-	C    <-chan input
+type consumer struct {
+	C    <-chan readResult
 	done chan struct{}
+	wg   sync.WaitGroup
 }
 
-func (i ingestion) Stop() {
+func (i *consumer) Close() error {
 	select {
 	case i.done <- struct{}{}:
 	default:
 	}
+	i.wg.Wait()
+	return nil
 }
 
-func ingest(r proto.FrameReader) ingestion {
-	ch := make(chan input)
+type producer struct {
+	C    chan<- writeRequest
+	done chan struct{}
+	wg   sync.WaitGroup
+}
+
+func (i *producer) Close() error {
+	select {
+	case i.done <- struct{}{}:
+	default:
+	}
+	i.wg.Wait()
+	return nil
+}
+
+func consume(r *proto.FrameReader) *consumer {
+	ch := make(chan readResult)
 	done := make(chan struct{}, 1)
+	var wg sync.WaitGroup
 
 	go func() {
+		wg.Add(1)
+		defer wg.Done()
 
 	loop:
 		for {
 			frame, err := r.Read()
 
 			select {
-			case ch <- input{frame, err}:
+			case ch <- readResult{frame, err}:
 			case <-done:
 				break loop
 			}
 		}
 	}()
-	return ingestion{C: ch, done: done}
+	return &consumer{C: ch, done: done, wg: wg}
+}
+
+func produce(w io.Writer) *producer {
+	ch := make(chan writeRequest)
+	done := make(chan struct{}, 1)
+	var wg sync.WaitGroup
+
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+
+	loop:
+		for {
+			select {
+			case req, ok := <-ch:
+				if !ok {
+					break loop
+				}
+				written, err := req.Frame.WriteTo(w)
+				req.C <- writeResult{written, err}
+			case <-done:
+				break loop
+			}
+		}
+	}()
+	return &producer{C: ch, done: done, wg: wg}
 }
 
 type Session struct {
-	version     string
-	id          string
-	server      string
-	connection  net.Conn
-	txHeartBeat int
-	rxHeartBeat int
+	version        string
+	id             string
+	server         string
+	connection     net.Conn
+	consumer       *consumer
+	producer       *producer
+	txHeartBeat    int
+	rxHeartBeat    int
 }
 
 func (s *Session) String() string {
@@ -64,6 +125,10 @@ func (s *Session) String() string {
 		s.txHeartBeat,
 		s.rxHeartBeat,
 	)
+}
+
+func (s *Session) Send(destination string, options ...Option) error {
+	return nil
 }
 
 type Option proto.Header
@@ -149,6 +214,9 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	if nil != hbErr {
 		return nil, hbErr
 	}
+	cons := consume(frameReader)
+	prod := produce(c)
+
 	session := Session{
 		version:     version,
 		id:          sessionId,
@@ -156,6 +224,8 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 		connection:  c,
 		txHeartBeat: tx,
 		rxHeartBeat: rx,
+		consumer: cons,
+		producer: prod,
 	}
 	return &session, nil
 }
