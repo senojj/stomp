@@ -8,112 +8,17 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 )
 
-type writeResult struct {
-	Written int64
-	Err     error
-}
-
-type writeRequest struct {
-	Frame proto.ClientFrame
-	C     chan<- writeResult
-}
-
-type readResult struct {
-	Frame *proto.ServerFrame
-	Err   error
-}
-
-type consumer struct {
-	C    <-chan readResult
-	done chan struct{}
-	wg   sync.WaitGroup
-}
-
-func (i *consumer) Close() error {
-	select {
-	case i.done <- struct{}{}:
-	default:
-	}
-	i.wg.Wait()
-	return nil
-}
-
-type producer struct {
-	C    chan<- writeRequest
-	done chan struct{}
-	wg   sync.WaitGroup
-}
-
-func (i *producer) Close() error {
-	select {
-	case i.done <- struct{}{}:
-	default:
-	}
-	i.wg.Wait()
-	return nil
-}
-
-func consume(r *proto.FrameReader) *consumer {
-	ch := make(chan readResult)
-	done := make(chan struct{}, 1)
-	var wg sync.WaitGroup
-
-	go func() {
-		wg.Add(1)
-		defer wg.Done()
-
-	loop:
-		for {
-			frame, err := r.Read()
-
-			select {
-			case ch <- readResult{frame, err}:
-			case <-done:
-				break loop
-			}
-		}
-	}()
-	return &consumer{C: ch, done: done, wg: wg}
-}
-
-func produce(w io.Writer) *producer {
-	ch := make(chan writeRequest)
-	done := make(chan struct{}, 1)
-	var wg sync.WaitGroup
-
-	go func() {
-		wg.Add(1)
-		defer wg.Done()
-
-	loop:
-		for {
-			select {
-			case req, ok := <-ch:
-				if !ok {
-					break loop
-				}
-				written, err := req.Frame.WriteTo(w)
-				req.C <- writeResult{written, err}
-			case <-done:
-				break loop
-			}
-		}
-	}()
-	return &producer{C: ch, done: done, wg: wg}
-}
-
 type Session struct {
-	version        string
-	id             string
-	server         string
-	connection     net.Conn
-	consumer       *consumer
-	producer       *producer
-	txHeartBeat    int
-	rxHeartBeat    int
+	version     string
+	id          string
+	server      string
+	connection  net.Conn
+	consumer    *consumer
+	producer    *producer
+	txHeartBeat int
+	rxHeartBeat int
 }
 
 func (s *Session) String() string {
@@ -127,26 +32,11 @@ func (s *Session) String() string {
 	)
 }
 
-func (s *Session) Send(destination string, options ...Option) error {
-	return nil
-}
+func (s *Session) Send(destination string, content io.Reader, options ...func(Option)) error {
+	frame := proto.NewFrame(proto.CmdSend, content)
 
-type Option proto.Header
-
-func (o Option) Set(name string, value ...string) {
-	o[name] = value
-}
-
-func WithCredentials(login, passcode string) func(Option) {
-	return func(option Option) {
-		option.Set(proto.HdrLogin, login)
-		option.Set(proto.HdrPasscode, passcode)
-	}
-}
-
-func WithHeartBeat(tx, rx int) func(Option) {
-	return func(option Option) {
-		option.Set(proto.HdrHeartBeat, strconv.Itoa(tx)+","+strconv.Itoa(rx))
+	for _, option := range options {
+		option(Option(frame.Header))
 	}
 }
 
@@ -224,8 +114,8 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 		connection:  c,
 		txHeartBeat: tx,
 		rxHeartBeat: rx,
-		consumer: cons,
-		producer: prod,
+		consumer:    cons,
+		producer:    prod,
 	}
 	return &session, nil
 }
