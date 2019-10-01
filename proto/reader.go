@@ -18,12 +18,12 @@ type MeasurableReader interface {
 	Len() int
 }
 
-type flushCloser struct {
+type drainCloser struct {
 	io.Reader
 }
 
-func (fc *flushCloser) Close() error {
-	_, err := ioutil.ReadAll(fc)
+func (d *drainCloser) Close() error {
+	_, err := ioutil.ReadAll(d)
 
 	if nil != err && io.EOF != err {
 		return err
@@ -31,8 +31,8 @@ func (fc *flushCloser) Close() error {
 	return nil
 }
 
-func FlushCloser(r io.Reader) io.ReadCloser {
-	return &flushCloser{r}
+func DrainCloser(r io.Reader) io.ReadCloser {
+	return &drainCloser{r}
 }
 
 type DelimitedReader struct {
@@ -182,7 +182,7 @@ func (fr *FrameReader) Read() (*ServerFrame, error) {
 	return &ServerFrame{
 		Command: command,
 		Header:  header,
-		Body:    FlushCloser(body),
+		Body:    DrainCloser(body),
 	}, nil
 }
 
