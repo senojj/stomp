@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ func TestConnect(t *testing.T) {
 	if nil != dialErr {
 		t.Fatal(dialErr)
 	}
-	_, connErr := Connect(
+	session, connErr := Connect(
 		conn,
 		WithCredentials("mixr", os.Getenv("MQ_PASSWORD")),
 		WithHeartBeat(0, 1000),
@@ -24,6 +25,11 @@ func TestConnect(t *testing.T) {
 
 	if nil != connErr {
 		t.Fatal(connErr)
+	}
+	clsErr := session.Close()
+
+	if nil != clsErr {
+		t.Fatal(clsErr)
 	}
 }
 
@@ -53,6 +59,49 @@ func TestSession_Send1(t *testing.T) {
 			"/queue/a.test",
 			content,
 			WithContentType("text/plain"),
+		)
+		cancel()
+
+		if nil != sendErr {
+			t.Fatal(sendErr)
+		}
+	}
+	elapsed := int64(time.Since(start) / time.Second)
+	clsErr := session.Close()
+
+	if nil != clsErr {
+		fmt.Println(clsErr)
+	}
+	fmt.Printf("rate %ds\n", int64(float64(sends)/float64(elapsed)))
+}
+
+func TestSession_Send2(t *testing.T) {
+	conn, dialErr := tls.Dial("tcp", os.Getenv("MQ_URI"), nil)
+
+	if nil != dialErr {
+		t.Fatal(dialErr)
+	}
+	session, connErr := Connect(
+		conn,
+		WithCredentials("mixr", os.Getenv("MQ_PASSWORD")),
+		WithHeartBeat(0, 5000),
+	)
+
+	if nil != connErr {
+		t.Fatal(connErr)
+	}
+	const sends = 10000
+	start := time.Now()
+	for i := 0; i < sends; i++ {
+		content := strings.NewReader("hello, from Stomp")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+		sendErr := session.Send(
+			ctx,
+			"/queue/a.test",
+			content,
+			WithContentType("text/plain"),
+			WithReceipt("send-" + strconv.Itoa(i)),
 		)
 		cancel()
 

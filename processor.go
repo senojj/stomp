@@ -33,7 +33,7 @@ func (p *processor) Close() error {
 func process(writer io.Writer, reader *proto.FrameReader) *processor {
 	ch := make(chan writeRequest)
 	done := make(chan struct{}, 1)
-	receipts := make(map[string]chan<- error)
+	var receipts receiptMap
 	ticker := time.NewTicker(time.Nanosecond)
 	var wg sync.WaitGroup
 
@@ -58,8 +58,12 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						id, ok := frame.Header.Get(proto.HdrReceiptId)
 
 						if ok {
-							receipts[id] <- nil
-							delete(receipts, id)
+							rch, has := receipts.Get(id)
+
+							if has {
+								rch <- nil
+								receipts.Del(id)
+							}
 						} else {
 							log.Printf("error: stomp: unknown receipt-id: %s", id)
 						}
@@ -74,8 +78,12 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						}
 
 						if ok {
-							receipts[id] <- fmt.Errorf(string(content))
-							delete(receipts, id)
+							rch, has := receipts.Get(id)
+
+							if has {
+								rch <- fmt.Errorf(string(content))
+								receipts.Del(id)
+							}
 						} else {
 							log.Printf(string(content))
 						}
@@ -101,7 +109,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 				id, ok := wr.Frame.Header.Get(proto.HdrReceipt)
 
 				if ok {
-					receipts[id] = wr.C
+					receipts.Set(id, wr.C)
 				}
 				_, wrErr := wr.Frame.WriteTo(writer)
 				wr.C <- wrErr

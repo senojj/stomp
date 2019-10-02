@@ -23,7 +23,7 @@ type drainCloser struct {
 }
 
 func (d *drainCloser) Close() error {
-	_, err := ioutil.ReadAll(d)
+	_, err := io.Copy(ioutil.Discard, d)
 
 	if nil != err && io.EOF != err {
 		return err
