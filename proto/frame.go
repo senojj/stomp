@@ -1,6 +1,7 @@
 package proto
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"strconv"
@@ -35,7 +36,8 @@ func calculateContentLength(r io.Reader) int {
 	}
 }
 
-func (f *ClientFrame) WriteTo(w io.Writer) (int64, error) {
+func (f *ClientFrame) WriteTo(writer io.Writer) (int64, error) {
+	w := bufio.NewWriterSize(writer, 4096)
 	var written int64 = 0
 
 	cmdBytes, cmdWrtErr := f.Command.WriteTo(w)
@@ -79,7 +81,11 @@ func (f *ClientFrame) WriteTo(w io.Writer) (int64, error) {
 		return written, nullWrtErr
 	}
 	written += int64(nullBytes)
+	flErr := w.Flush()
 
+	if nil != flErr {
+		return written, flErr
+	}
 	return written, nil
 }
 

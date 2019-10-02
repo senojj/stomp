@@ -91,13 +91,12 @@ func (m Header) WriteTo(w io.Writer) (int64, error) {
 
 	for k, v := range m {
 		for _, i := range v {
-			out := fmt.Sprintf("%s:%s\n", encode(k), encode(i))
-			b, wrtErr := w.Write([]byte(out))
+			b, wrtErr := fmt.Fprintf(w, "%s:%s\n", encode(k), encode(i))
 
 			if nil != wrtErr {
-				return written, fmt.Errorf("problem writing header: %v", wrtErr)
+				return written, fmt.Errorf("problem writing header: %w", wrtErr)
 			}
-			written = written + int64(b)
+			written += int64(b)
 		}
 	}
 	return written, nil

@@ -12,8 +12,7 @@ func (c Command) String() string {
 }
 
 func (c Command) WriteTo(w io.Writer) (int64, error) {
-	out := fmt.Sprintf("%s\n", c)
-	b, e := w.Write([]byte(out))
+	b, e := fmt.Fprintf(w, "%s\n", c)
 	return int64(b), e
 }
 
