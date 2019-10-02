@@ -90,7 +90,7 @@ func TestSession_Send2(t *testing.T) {
 	if nil != connErr {
 		t.Fatal(connErr)
 	}
-	const sends = 10000
+	const sends = 500
 	start := time.Now()
 	for i := 0; i < sends; i++ {
 		content := strings.NewReader("hello, from Stomp")
@@ -106,7 +106,7 @@ func TestSession_Send2(t *testing.T) {
 		cancel()
 
 		if nil != sendErr {
-			t.Fatal(sendErr)
+			t.Error(sendErr)
 		}
 	}
 	elapsed := int64(time.Since(start) / time.Second)

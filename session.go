@@ -57,7 +57,14 @@ func (s *Session) sendFrame(ctx context.Context, frame *proto.ClientFrame) error
 
 	select {
 	case s.processor.C <- req:
-		return nil
+		select {
+		case result := <-ch:
+			if nil != result {
+				return result
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	case <-ctx.Done():
 		return ctx.Err()
 	}
