@@ -36,7 +36,6 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	if nil != frameRdErr {
 		return nil, frameRdErr
 	}
-	defer respFrame.Body.Close()
 
 	if respFrame.Command == proto.CmdError {
 		contentType, ok := respFrame.Header.Get(proto.HdrContentType)
@@ -73,6 +72,7 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	if nil != hbErr {
 		return nil, hbErr
 	}
+	respFrame.Body.Close()
 	proc := process(c, frameReader)
 
 	session := Session{
