@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +27,7 @@ func TestConnect(t *testing.T) {
 	}
 }
 
-func TestSession_Send(t *testing.T) {
+func TestSession_Send1(t *testing.T) {
 	conn, dialErr := tls.Dial("tcp", os.Getenv("MQ_URI"), nil)
 
 	if nil != dialErr {
@@ -43,8 +42,9 @@ func TestSession_Send(t *testing.T) {
 	if nil != connErr {
 		t.Fatal(connErr)
 	}
+	const sends = 50000
 	start := time.Now()
-	for i := 0; i < 300; i++ {
+	for i := 0; i < sends; i++ {
 		content := strings.NewReader("hello, from Stomp")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
@@ -53,7 +53,6 @@ func TestSession_Send(t *testing.T) {
 			"/queue/a.test",
 			content,
 			WithContentType("text/plain"),
-			WithReceipt(strconv.Itoa(i)),
 		)
 		cancel()
 
@@ -61,6 +60,11 @@ func TestSession_Send(t *testing.T) {
 			t.Fatal(sendErr)
 		}
 	}
-	elapsed := time.Since(start)
-	fmt.Printf("time it took %ds\n", 300/(elapsed/time.Second))
+	elapsed := int64(time.Since(start) / time.Second)
+	clsErr := session.Close()
+
+	if nil != clsErr {
+		fmt.Println(clsErr)
+	}
+	fmt.Printf("rate %ds\n", int64(float64(sends)/float64(elapsed)))
 }

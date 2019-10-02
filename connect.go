@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type writeRequest struct {
@@ -24,12 +25,12 @@ type processor struct {
 	wg   sync.WaitGroup
 }
 
-func (i *processor) Close() error {
+func (p *processor) Close() error {
 	select {
-	case i.done <- struct{}{}:
+	case p.done <- struct{}{}:
 	default:
 	}
-	i.wg.Wait()
+	p.wg.Wait()
 	return nil
 }
 
@@ -37,48 +38,58 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 	ch := make(chan writeRequest)
 	done := make(chan struct{}, 1)
 	receipts := make(map[string]chan<- error)
+	ticker := time.NewTicker(time.Nanosecond)
 	var wg sync.WaitGroup
 
 	go func() {
 		wg.Add(1)
 		defer wg.Done()
 
+	loop:
 		for {
-			frame, rdErr := reader.Read()
+			select {
+			case <-ticker.C:
+				frame, rdErr := reader.Read()
 
-			if nil != rdErr {
-				log.Println(rdErr)
-			}
-
-			if nil != frame {
-				switch frame.Command {
-				case proto.CmdReceipt:
-					id, ok := frame.Header.Get(proto.HdrReceiptId)
-
-					if ok {
-						receipts[id] <- nil
-						delete(receipts, id)
-					} else {
-						log.Printf("error: stomp: unknown receipt-id: %s", id)
-					}
-					frame.Body.Close()
-				case proto.CmdError:
-					id, ok := frame.Header.Get(proto.HdrReceiptId)
-					content, rdErr := ioutil.ReadAll(frame.Body)
-
-					if nil != rdErr {
-						log.Println(rdErr)
-						continue
-					}
-
-					if ok {
-						receipts[id] <- fmt.Errorf(string(content))
-						delete(receipts, id)
-					} else {
-						log.Printf(string(content))
-					}
-					frame.Body.Close()
+				if nil != rdErr {
+					log.Println(rdErr)
+					break loop
 				}
+
+				if nil != frame {
+					switch frame.Command {
+					case proto.CmdReceipt:
+						id, ok := frame.Header.Get(proto.HdrReceiptId)
+
+						if ok {
+							receipts[id] <- nil
+							delete(receipts, id)
+						} else {
+							log.Printf("error: stomp: unknown receipt-id: %s", id)
+						}
+						frame.Body.Close()
+					case proto.CmdError:
+						id, ok := frame.Header.Get(proto.HdrReceiptId)
+						content, rdErr := ioutil.ReadAll(frame.Body)
+
+						if nil != rdErr {
+							log.Println(rdErr)
+							continue
+						}
+
+						if ok {
+							receipts[id] <- fmt.Errorf(string(content))
+							delete(receipts, id)
+						} else {
+							log.Printf(string(content))
+						}
+						frame.Body.Close()
+					}
+				}
+			case <-done:
+				done <- struct{}{}
+				ticker.Stop()
+				break loop
 			}
 		}
 	}()
@@ -99,6 +110,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 				_, wrErr := wr.Frame.WriteTo(writer)
 				wr.C <- wrErr
 			case <-done:
+				done <- struct{}{}
 				break loop
 			}
 		}
@@ -108,33 +120,46 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 }
 
 type Session struct {
-	version     string
-	id          string
-	server      string
+	Version     string
+	ID          string
+	Server      string
 	connection  net.Conn
 	processor   *processor
 	txHeartBeat int
 	rxHeartBeat int
+	m           sync.Mutex
+	closed      bool
 }
 
 func (s *Session) String() string {
 	return fmt.Sprintf(
 		"{Version: %s, ID: %s, Server: %s, TxHeartBeat: %d, RxHeartBeat: %d}",
-		s.version,
-		s.id,
-		s.server,
+		s.Version,
+		s.ID,
+		s.Server,
 		s.txHeartBeat,
 		s.rxHeartBeat,
 	)
 }
 
-func (s *Session) Send(ctx context.Context, destination string, content io.Reader, options ...func(Option)) error {
-	frame := proto.NewFrame(proto.CmdSend, content)
+func (s *Session) Close() error {
+	s.m.Lock()
+	defer s.m.Unlock()
 
-	for _, option := range options {
-		option(Option(frame.Header))
+	if s.closed {
+		return nil
 	}
-	frame.Header.Set(proto.HdrDestination, destination)
+	frame := proto.NewFrame(proto.CmdDisconnect, nil)
+	frame.Header.Set(proto.HdrReceipt, "session-disconnect")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	sndErr := s.sendFrame(ctx, frame)
+	cancel()
+	s.processor.Close()
+	s.closed = true
+	return sndErr
+}
+
+func (s *Session) sendFrame(ctx context.Context, frame *proto.ClientFrame) error {
 	ch := make(chan error, 1)
 
 	req := writeRequest{frame, ch}
@@ -165,6 +190,23 @@ func (s *Session) Send(ctx context.Context, destination string, content io.Reade
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (s *Session) Send(ctx context.Context, destination string, content io.Reader, options ...func(Option)) error {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	if s.closed {
+		return ErrSessionClosed
+	}
+
+	frame := proto.NewFrame(proto.CmdSend, content)
+
+	for _, option := range options {
+		option(Option(frame.Header))
+	}
+	frame.Header.Set(proto.HdrDestination, destination)
+	return s.sendFrame(ctx, frame)
 }
 
 func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
@@ -234,9 +276,9 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	proc := process(c, frameReader)
 
 	session := Session{
-		version:     version,
-		id:          sessionId,
-		server:      server,
+		Version:     version,
+		ID:          sessionId,
+		Server:      server,
 		connection:  c,
 		txHeartBeat: tx,
 		rxHeartBeat: rx,
