@@ -43,7 +43,6 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 		wg.Add(1)
 		defer wg.Done()
 
-	loop:
 		for {
 			frame, rdErr := reader.Read()
 
@@ -81,7 +80,15 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 					frame.Body.Close()
 				}
 			}
+		}
+	}()
 
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+
+	loop:
+		for {
 			select {
 			case wr := <-ch:
 				id, ok := wr.Frame.Header.Get(proto.HdrReceipt)
@@ -96,6 +103,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 			}
 		}
 	}()
+
 	return &processor{C: ch, done: done}
 }
 
