@@ -148,7 +148,7 @@ func readHeader(r io.Reader) (Header, error) {
 // to remove the frame's contents from the stream prior to the next
 // read. A return value of (nil, nil) indicates that a heart-beat
 // was received.
-func (fr *FrameReader) Read() (*ServerFrame, error) {
+func (fr *FrameReader) Read() (Frame, error) {
 	nullTerminatedReader := DelimitReader(fr.reader, byteNull)
 	command, cmdRdErr := readCommand(nullTerminatedReader)
 
@@ -179,10 +179,10 @@ func (fr *FrameReader) Read() (*ServerFrame, error) {
 		body = nullTerminatedReader
 	}
 
-	return &ServerFrame{
-		Command: command,
-		Header:  header,
-		Body:    DrainCloser(body),
+	return &serverFrame{
+		command: command,
+		header:  header,
+		body:    DrainCloser(body),
 	}, nil
 }
 

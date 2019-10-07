@@ -14,7 +14,8 @@ func TestFrame_WriteTo(t *testing.T) {
 
 	frame := NewFrame(CmdSend, in)
 	var out bytes.Buffer
-	_, wrtErr := frame.WriteTo(&out)
+	frameWriter := NewFrameWriter(&out)
+	_, wrtErr := frameWriter.Write(frame)
 
 	if nil != wrtErr {
 		t.Error(wrtErr)

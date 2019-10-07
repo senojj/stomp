@@ -1,98 +1,69 @@
 package proto
 
 import (
-	"bufio"
 	"fmt"
 	"io"
-	"strconv"
 )
 
-type ServerFrame struct {
-	Command Command
-	Header  Header
-	Body    io.ReadCloser
+type Frame interface {
+	Command() Command
+	Header() Header
+	Body() io.Reader
+	io.Closer
 }
 
-func (sf *ServerFrame) String() string {
+type serverFrame struct {
+	command Command
+	header  Header
+	body    io.ReadCloser
+}
+
+func (sf *serverFrame) Command() Command {
+	return sf.command
+}
+
+func (sf *serverFrame) Header() Header {
+	return sf.header
+}
+
+func (sf *serverFrame) Body() io.Reader {
+	return sf.body
+}
+
+func (sf *serverFrame) String() string {
 	return fmt.Sprintf("{Command: %s, Header: %v}", sf.Command, sf.Header)
 }
 
-type ClientFrame struct {
-	Command Command
-	Header  Header
-	Body    io.Reader
+func (sf *serverFrame) Close() error {
+	return sf.body.Close()
 }
 
-func calculateContentLength(r io.Reader) int {
-	if nil != r {
-		v, ok := r.(MeasurableReader)
-
-		if ok {
-			return v.Len()
-		}
-		return -1
-	} else {
-		return 0
-	}
+type clientFrame struct {
+	command Command
+	header  Header
+	body    io.Reader
 }
 
-func (f *ClientFrame) WriteTo(writer io.Writer) (int64, error) {
-	w := bufio.NewWriterSize(writer, 4096)
-	var written int64 = 0
-
-	cmdBytes, cmdWrtErr := f.Command.WriteTo(w)
-
-	if nil != cmdWrtErr {
-		return written, cmdWrtErr
-	}
-	written += cmdBytes
-
-	contentLength := calculateContentLength(f.Body)
-
-	if contentLength > -1 {
-		f.Header.Set(HdrContentLength, strconv.Itoa(contentLength))
-	}
-	hdrBytes, hdrWrtErr := f.Header.WriteTo(w)
-
-	if nil != hdrWrtErr {
-		return written, hdrWrtErr
-	}
-	written += hdrBytes
-
-	nullBytes, nullWrtErr := w.Write([]byte(charNewLine))
-
-	if nil != nullWrtErr {
-		return written, nullWrtErr
-	}
-	written += int64(nullBytes)
-
-	if nil != f.Body {
-		bdyb, bdyWrtErr := io.Copy(w, f.Body)
-
-		if nil != bdyWrtErr {
-			return written, bdyWrtErr
-		}
-		written += bdyb
-	}
-
-	nullBytes, nullWrtErr = w.Write([]byte(charNull))
-
-	if nil != nullWrtErr {
-		return written, nullWrtErr
-	}
-	written += int64(nullBytes)
-	flErr := w.Flush()
-
-	if nil != flErr {
-		return written, flErr
-	}
-	return written, nil
+func (cf *clientFrame) Command() Command {
+	return cf.command
 }
 
-func NewFrame(command Command, body io.Reader) *ClientFrame {
-	return &ClientFrame{
-		Command: command,
-		Header:  make(Header),
-		Body:    body,
+func (cf *clientFrame) Header() Header {
+	return cf.header
+}
+
+func (cf *clientFrame) Body() io.Reader {
+	return cf.body
+}
+
+func (cf *clientFrame) Close() error {
+	return nil
+}
+
+func NewFrame(command Command, body io.Reader) *clientFrame {
+	return &clientFrame{
+		command: command,
+		header:  make(Header),
+		body:    body,
 	}
 }

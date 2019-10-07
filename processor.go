@@ -11,7 +11,7 @@ import (
 )
 
 type writeRequest struct {
-	Frame *proto.ClientFrame
+	Frame proto.Frame
 	C     chan<- error
 }
 
@@ -36,6 +36,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 	var receipts receiptMap
 	ticker := time.NewTicker(time.Nanosecond)
 	var wg sync.WaitGroup
+	frameWriter := proto.NewFrameWriter(writer)
 
 	go func() {
 		wg.Add(1)
@@ -53,9 +54,9 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 				}
 
 				if nil != frame {
-					switch frame.Command {
+					switch frame.Command() {
 					case proto.CmdReceipt:
-						id, ok := frame.Header.Get(proto.HdrReceiptId)
+						id, ok := frame.Header().Get(proto.HdrReceiptId)
 
 						if ok {
 							rch, has := receipts.Get(id)
@@ -67,10 +68,10 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						} else {
 							log.Printf("error: stomp: unknown receipt-id: %s", id)
 						}
-						frame.Body.Close()
+						frame.Close()
 					case proto.CmdError:
-						id, ok := frame.Header.Get(proto.HdrReceiptId)
-						content, rdErr := ioutil.ReadAll(frame.Body)
+						id, ok := frame.Header().Get(proto.HdrReceiptId)
+						content, rdErr := ioutil.ReadAll(frame.Body())
 
 						if nil != rdErr {
 							log.Println(rdErr)
@@ -87,7 +88,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						} else {
 							log.Printf(string(content))
 						}
-						frame.Body.Close()
+						frame.Close()
 					}
 				}
 			case <-done:
@@ -106,12 +107,12 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 		for {
 			select {
 			case wr := <-ch:
-				id, ok := wr.Frame.Header.Get(proto.HdrReceipt)
+				id, ok := wr.Frame.Header().Get(proto.HdrReceipt)
 
 				if ok {
 					receipts.Set(id, wr.C)
 				}
-				_, wrErr := wr.Frame.WriteTo(writer)
+				_, wrErr := frameWriter.Write(wr.Frame)
 				wr.C <- wrErr
 			case <-done:
 				done <- struct{}{}

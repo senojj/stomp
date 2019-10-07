@@ -1,19 +1,9 @@
 package proto
 
-import (
-	"fmt"
-	"io"
-)
-
 type Command string
 
 func (c Command) String() string {
 	return string(c)
-}
-
-func (c Command) WriteTo(w io.Writer) (int64, error) {
-	b, e := fmt.Fprintf(w, "%s\n", c)
-	return int64(b), e
 }
 
 const (
