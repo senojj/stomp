@@ -31,7 +31,7 @@ func (sf *serverFrame) Body() io.Reader {
 }
 
 func (sf *serverFrame) String() string {
-	return fmt.Sprintf("{Command: %s, Header: %v}", sf.Command, sf.Header)
+	return fmt.Sprintf("{Command: %s, Header: %v}", sf.Command(), sf.Header())
 }
 
 func (sf *serverFrame) Close() error {
