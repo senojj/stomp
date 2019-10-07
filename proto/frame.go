@@ -25,15 +25,12 @@ type ClientFrame struct {
 
 func calculateContentLength(r io.Reader) int {
 	if nil != r {
-		v, ok := r.(MeasurableReader)
-
-		if ok {
+		if v, ok := r.(MeasurableReader); ok {
 			return v.Len()
 		}
 		return -1
-	} else {
-		return 0
 	}
+	return 0
 }
 
 func (f *ClientFrame) WriteTo(writer io.Writer) (int64, error) {
