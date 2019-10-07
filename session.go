@@ -41,7 +41,7 @@ func (s *Session) Close() error {
 		return nil
 	}
 	frame := proto.NewFrame(proto.CmdDisconnect, nil)
-	frame.Header().Set(proto.HdrReceipt, "session-disconnect")
+	frame.Header.Set(proto.HdrReceipt, "session-disconnect")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	sndErr := s.sendFrame(ctx, frame)
 	cancel()
@@ -50,7 +50,7 @@ func (s *Session) Close() error {
 	return sndErr
 }
 
-func (s *Session) sendFrame(ctx context.Context, frame proto.Frame) error {
+func (s *Session) sendFrame(ctx context.Context, frame *proto.ClientFrame) error {
 	ch := make(chan error, 1)
 
 	req := writeRequest{frame, ch}
@@ -69,7 +69,7 @@ func (s *Session) sendFrame(ctx context.Context, frame proto.Frame) error {
 		return ctx.Err()
 	}
 
-	_, ok := frame.Header().Get(proto.HdrReceipt)
+	_, ok := frame.Header.Get(proto.HdrReceipt)
 
 	if !ok {
 		return nil
@@ -94,8 +94,8 @@ func (s *Session) Send(ctx context.Context, destination string, content io.Reade
 	frame := proto.NewFrame(proto.CmdSend, content)
 
 	for _, option := range options {
-		option(Option(frame.Header()))
+		option(Option(frame.Header))
 	}
-	frame.Header().Set(proto.HdrDestination, destination)
+	frame.Header.Set(proto.HdrDestination, destination)
 	return s.sendFrame(ctx, frame)
 }

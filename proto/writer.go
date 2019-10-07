@@ -43,22 +43,22 @@ func writeHeader(header Header, writer io.Writer) (int, error) {
 	return written, nil
 }
 
-func (fw *FrameWriter) Write(frame Frame) (int64, error) {
+func (fw *FrameWriter) Write(frame *ClientFrame) (int64, error) {
 	var written int64 = 0
 
-	cmdBytes, cmdWrtErr := fmt.Fprintf(fw.writer, "%s\n", frame.Command())
+	cmdBytes, cmdWrtErr := fmt.Fprintf(fw.writer, "%s\n", frame.Command)
 
 	if nil != cmdWrtErr {
 		return written, cmdWrtErr
 	}
 	written += int64(cmdBytes)
 
-	contentLength := calculateContentLength(frame.Body())
+	contentLength := calculateContentLength(frame.Body)
 
 	if contentLength > -1 {
-		frame.Header().Set(HdrContentLength, strconv.Itoa(contentLength))
+		frame.Header.Set(HdrContentLength, strconv.Itoa(contentLength))
 	}
-	hdrBytes, hdrWrtErr := writeHeader(frame.Header(), fw.writer)
+	hdrBytes, hdrWrtErr := writeHeader(frame.Header, fw.writer)
 
 	if nil != hdrWrtErr {
 		return written, hdrWrtErr
@@ -72,8 +72,8 @@ func (fw *FrameWriter) Write(frame Frame) (int64, error) {
 	}
 	written += int64(nullBytes)
 
-	if nil != frame.Body() {
-		bdyb, bdyWrtErr := io.Copy(fw.writer, frame.Body())
+	if nil != frame.Body {
+		bdyb, bdyWrtErr := io.Copy(fw.writer, frame.Body)
 
 		if nil != bdyWrtErr {
 			return written, bdyWrtErr

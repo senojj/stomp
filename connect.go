@@ -17,12 +17,12 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	}
 	frame := proto.NewFrame(proto.CmdConnect, nil)
 
-	frame.Header().Set(proto.HdrHost, host)
-	frame.Header().Set(proto.HdrAcceptVersion, "1.1,1.2")
-	frame.Header().Set(proto.HdrHeartBeat, "0,0")
+	frame.Header.Set(proto.HdrHost, host)
+	frame.Header.Set(proto.HdrAcceptVersion, "1.1,1.2")
+	frame.Header.Set(proto.HdrHeartBeat, "0,0")
 
 	for _, option := range options {
-		option(Option(frame.Header()))
+		option(Option(frame.Header))
 	}
 	frameWriter := proto.NewFrameWriter(c)
 	_, frameWrtErr := frameWriter.Write(frame)
@@ -38,12 +38,12 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 		return nil, frameRdErr
 	}
 
-	if respFrame.Command() == proto.CmdError {
-		contentType, ok := respFrame.Header().Get(proto.HdrContentType)
+	if respFrame.Command == proto.CmdError {
+		contentType, ok := respFrame.Header.Get(proto.HdrContentType)
 		var err error
 
 		if ok && contentType == "text/plain" {
-			body, bodyRdErr := ioutil.ReadAll(respFrame.Body())
+			body, bodyRdErr := ioutil.ReadAll(respFrame.Body)
 
 			if nil != bodyRdErr {
 				err = fmt.Errorf("unable to read frame body: %v", bodyRdErr)
@@ -56,14 +56,14 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 		return nil, err
 	}
 
-	if respFrame.Command() != proto.CmdConnected {
+	if respFrame.Command != proto.CmdConnected {
 		return nil, fmt.Errorf("unexpected frame command. expected %s, got %s", proto.CmdConnected, respFrame.Command)
 	}
-	version, _ := respFrame.Header().Get(proto.HdrVersion)
-	sessionId, _ := respFrame.Header().Get(proto.HdrSession)
-	server, _ := respFrame.Header().Get(proto.HdrServer)
+	version, _ := respFrame.Header.Get(proto.HdrVersion)
+	sessionId, _ := respFrame.Header.Get(proto.HdrSession)
+	server, _ := respFrame.Header.Get(proto.HdrServer)
 
-	heartBeat, ok := respFrame.Header().Get(proto.HdrHeartBeat)
+	heartBeat, ok := respFrame.Header.Get(proto.HdrHeartBeat)
 
 	if !ok {
 		heartBeat = "0,0"
@@ -73,7 +73,7 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	if nil != hbErr {
 		return nil, hbErr
 	}
-	respFrame.Close()
+	respFrame.Body.Close()
 	proc := process(c, frameReader)
 
 	session := Session{

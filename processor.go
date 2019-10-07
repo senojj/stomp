@@ -11,7 +11,7 @@ import (
 )
 
 type writeRequest struct {
-	Frame proto.Frame
+	Frame *proto.ClientFrame
 	C     chan<- error
 }
 
@@ -54,9 +54,9 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 				}
 
 				if nil != frame {
-					switch frame.Command() {
+					switch frame.Command {
 					case proto.CmdReceipt:
-						id, ok := frame.Header().Get(proto.HdrReceiptId)
+						id, ok := frame.Header.Get(proto.HdrReceiptId)
 
 						if ok {
 							rch, has := receipts.Get(id)
@@ -68,10 +68,10 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						} else {
 							log.Printf("error: stomp: unknown receipt-id: %s", id)
 						}
-						frame.Close()
+						frame.Body.Close()
 					case proto.CmdError:
-						id, ok := frame.Header().Get(proto.HdrReceiptId)
-						content, rdErr := ioutil.ReadAll(frame.Body())
+						id, ok := frame.Header.Get(proto.HdrReceiptId)
+						content, rdErr := ioutil.ReadAll(frame.Body)
 
 						if nil != rdErr {
 							log.Println(rdErr)
@@ -88,7 +88,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						} else {
 							log.Printf(string(content))
 						}
-						frame.Close()
+						frame.Body.Close()
 					}
 				}
 			case <-done:
@@ -107,7 +107,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 		for {
 			select {
 			case wr := <-ch:
-				id, ok := wr.Frame.Header().Get(proto.HdrReceipt)
+				id, ok := wr.Frame.Header.Get(proto.HdrReceipt)
 
 				if ok {
 					receipts.Set(id, wr.C)

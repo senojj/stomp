@@ -76,8 +76,8 @@ func TestFrameReader_Read(t *testing.T) {
 		t.Fatal(bdyConnWrtErr)
 	}
 	frmConn := NewFrame(CmdConnect, &bdyConn)
-	frmConn.Header().Append(HdrLogin, "hello")
-	frmConn.Header().Append(HdrPasscode, "world")
+	frmConn.Header.Append(HdrLogin, "hello")
+	frmConn.Header.Append(HdrPasscode, "world")
 
 	_, frmWrtErr := frameWriter.Write(frmConn)
 
@@ -104,11 +104,11 @@ func TestFrameReader_Read(t *testing.T) {
 		t.Fatal(frmRdErr)
 	}
 
-	if frm1.Command() != CmdConnect {
-		t.Fatalf("wrong frame command. expected %s, got %s", CmdConnect, frm1.Command())
+	if frm1.Command != CmdConnect {
+		t.Fatalf("wrong frame command. expected %s, got %s", CmdConnect, frm1.Command)
 	}
 
-	bdyConnBytes, bdyConnRdErr := ioutil.ReadAll(frm1.Body())
+	bdyConnBytes, bdyConnRdErr := ioutil.ReadAll(frm1.Body)
 
 	if nil != bdyConnRdErr {
 		t.Fatal(bdyConnRdErr)
@@ -126,11 +126,11 @@ func TestFrameReader_Read(t *testing.T) {
 		t.Fatal(frm2RdErr)
 	}
 
-	if frm2.Command() != CmdSend {
-		t.Fatalf("wrong frame command. expected %v, got %v", []byte(CmdSend), []byte(frm2.Command()))
+	if frm2.Command != CmdSend {
+		t.Fatalf("wrong frame command. expected %v, got %v", []byte(CmdSend), []byte(frm2.Command))
 	}
 
-	bdySendBytes, bdySendRdErr := ioutil.ReadAll(frm2.Body())
+	bdySendBytes, bdySendRdErr := ioutil.ReadAll(frm2.Body)
 
 	if nil != bdySendRdErr {
 		t.Fatal(bdySendRdErr)
