@@ -13,6 +13,7 @@ import (
 type writeRequest struct {
 	Frame *proto.ClientFrame
 	C     chan<- error
+	Args  []interface{}
 }
 
 type processor struct {

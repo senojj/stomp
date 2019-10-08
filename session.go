@@ -51,10 +51,10 @@ func (s *Session) Close() error {
 	return sndErr
 }
 
-func (s *Session) sendFrame(ctx context.Context, frame *proto.ClientFrame) error {
+func (s *Session) sendFrame(ctx context.Context, frame *proto.ClientFrame, args ...interface{}) error {
 	ch := make(chan error, 1)
 
-	req := writeRequest{frame, ch}
+	req := writeRequest{frame, ch, args}
 
 	select {
 	case s.processor.C <- req:
@@ -84,7 +84,12 @@ func (s *Session) sendFrame(ctx context.Context, frame *proto.ClientFrame) error
 	}
 }
 
-func (s *Session) Send(ctx context.Context, destination string, content io.Reader, options ...func(Option)) error {
+func (s *Session) Send(
+	ctx context.Context,
+	destination string,
+	content io.Reader,
+	options ...func(Option),
+) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -101,7 +106,12 @@ func (s *Session) Send(ctx context.Context, destination string, content io.Reade
 	return s.sendFrame(ctx, frame)
 }
 
-func (s *Session) Subscribe(ctx context.Context, destination string, options ...func(Option)) (*Subscription, error) {
+func (s *Session) Subscribe(
+	ctx context.Context,
+	destination string,
+	fn func(Message),
+	options ...func(Option),
+) (*Subscription, error) {
 	if s.closed {
 		return nil, ErrSessionClosed
 	}
@@ -113,14 +123,14 @@ func (s *Session) Subscribe(ctx context.Context, destination string, options ...
 	id := nextId()
 	frame.Header.Set(proto.HdrId, id)
 
-	sendErr := s.sendFrame(ctx, frame)
+	sendErr := s.sendFrame(ctx, frame, fn)
 
 	if nil != sendErr {
 		return nil, sendErr
 	}
 
 	return &Subscription{
-		id: id,
+		id:      id,
 		session: s,
 	}, nil
 }
@@ -128,4 +138,11 @@ func (s *Session) Subscribe(ctx context.Context, destination string, options ...
 type Subscription struct {
 	id      string
 	session *Session
+}
+
+func (s *Subscription) Unsubscribe(options ...func(Option)) error {
+	if s.session.closed {
+		return ErrSessionClosed
+	}
+	frame := proto.NewFrame(proto.CmdUnsubscribe, nil)
 }
