@@ -91,6 +91,21 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 							log.Printf(string(content))
 						}
 						frame.Body.Close()
+					case proto.CmdMessage:
+						id, ok := frame.Header.Get(proto.HdrId)
+
+						if ok {
+							fn, has := subscriptions.Get(id)
+
+							if has {
+								message := Message{
+									Header(frame.Header),
+									frame.Body,
+								}
+								fn(message)
+							}
+						}
+						frame.Body.Close()
 					}
 				}
 			case <-done:
@@ -114,7 +129,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 
 					if ok {
 						if len(wr.Args) > 0 {
-							v, ok := wr.Args[0].(func(*Message))
+							v, ok := wr.Args[0].(func(Message))
 
 							if ok {
 								subscriptions.Set(id, v)
