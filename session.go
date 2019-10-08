@@ -18,6 +18,7 @@ type Session struct {
 	processor   *processor
 	txHeartBeat int
 	rxHeartBeat int
+	iden        *uint64
 	m           sync.Mutex
 	closed      bool
 }
@@ -98,4 +99,33 @@ func (s *Session) Send(ctx context.Context, destination string, content io.Reade
 	}
 	frame.Header.Set(proto.HdrDestination, destination)
 	return s.sendFrame(ctx, frame)
+}
+
+func (s *Session) Subscribe(ctx context.Context, destination string, options ...func(Option)) (*Subscription, error) {
+	if s.closed {
+		return nil, ErrSessionClosed
+	}
+	frame := proto.NewFrame(proto.CmdSubscribe, nil)
+
+	for _, option := range options {
+		option(Option(frame.Header))
+	}
+	id := nextId()
+	frame.Header.Set(proto.HdrId, id)
+
+	sendErr := s.sendFrame(ctx, frame)
+
+	if nil != sendErr {
+		return nil, sendErr
+	}
+
+	return &Subscription{
+		id: id,
+		session: s,
+	}, nil
+}
+
+type Subscription struct {
+	id      string
+	session *Session
 }
