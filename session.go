@@ -140,9 +140,15 @@ type Subscription struct {
 	session *Session
 }
 
-func (s *Subscription) Unsubscribe(options ...func(Option)) error {
+func (s *Subscription) Unsubscribe(ctx context.Context, options ...func(Option)) error {
 	if s.session.closed {
 		return ErrSessionClosed
 	}
 	frame := proto.NewFrame(proto.CmdUnsubscribe, nil)
+
+	for _, option := range options {
+		option(Option(frame.Header))
+	}
+	frame.Header.Set(proto.HdrId, s.id)
+	return s.session.sendFrame(ctx, frame)
 }
