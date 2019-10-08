@@ -35,6 +35,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 	ch := make(chan writeRequest)
 	done := make(chan struct{}, 1)
 	var receipts receiptMap
+	var subscriptions subscriptionMap
 	ticker := time.NewTicker(time.Nanosecond)
 	var wg sync.WaitGroup
 	frameWriter := proto.NewFrameWriter(writer)
@@ -108,6 +109,19 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 		for {
 			select {
 			case wr := <-ch:
+				if wr.Frame.Command == proto.CmdSubscribe {
+					id, ok := wr.Frame.Header.Get(proto.HdrId)
+
+					if ok {
+						if len(wr.Args) > 0 {
+							v, ok := wr.Args[0].(func(*Message))
+
+							if ok {
+								subscriptions.Set(id, v)
+							}
+						}
+					}
+				}
 				id, ok := wr.Frame.Header.Get(proto.HdrReceipt)
 
 				if ok {
