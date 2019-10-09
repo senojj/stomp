@@ -122,6 +122,7 @@ func (s *Session) Subscribe(
 	}
 	id := nextId()
 	frame.Header.Set(proto.HdrId, id)
+	frame.Header.Set(proto.HdrDestination, destination)
 
 	sendErr := s.sendFrame(ctx, frame, fn)
 

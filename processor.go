@@ -97,6 +97,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 
 							if has {
 								var wg sync.WaitGroup
+
 								message := Message{
 									Header(frame.Header),
 									&waitGroupReadCloser{
