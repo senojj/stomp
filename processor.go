@@ -70,7 +70,6 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						} else {
 							log.Printf("error: stomp: unknown receipt-id: %s", id)
 						}
-						frame.Body.Close()
 					case proto.CmdError:
 						id, ok := frame.Header.Get(proto.HdrReceiptId)
 						content, rdErr := ioutil.ReadAll(frame.Body)
@@ -90,7 +89,6 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						} else {
 							log.Printf(string(content))
 						}
-						frame.Body.Close()
 					case proto.CmdMessage:
 						id, ok := frame.Header.Get(proto.HdrId)
 
@@ -105,7 +103,11 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 								fn(message)
 							}
 						}
-						frame.Body.Close()
+					}
+					closeErr := frame.Body.Close()
+
+					if nil != closeErr {
+						log.Printf("error: stomp: closing frame: %v", closeErr)
 					}
 				}
 			case <-done:
