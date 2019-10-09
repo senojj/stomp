@@ -90,7 +90,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 							log.Printf(string(content))
 						}
 					case proto.CmdMessage:
-						id, ok := frame.Header.Get(proto.HdrId)
+						id, ok := frame.Header.Get(proto.HdrSubscription)
 
 						if ok {
 							fn, has := subscriptions.Get(id)
