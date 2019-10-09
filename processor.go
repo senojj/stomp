@@ -126,7 +126,8 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 		for {
 			select {
 			case wr := <-ch:
-				if wr.Frame.Command == proto.CmdSubscribe {
+				switch wr.Frame.Command {
+				case proto.CmdSubscribe:
 					id, ok := wr.Frame.Header.Get(proto.HdrId)
 
 					if ok {
@@ -137,6 +138,12 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 								subscriptions.Set(id, v)
 							}
 						}
+					}
+				case proto.CmdUnsubscribe:
+					id, ok := wr.Frame.Header.Get(proto.HdrId)
+
+					if ok {
+						subscriptions.Del(id)
 					}
 				}
 				id, ok := wr.Frame.Header.Get(proto.HdrReceipt)
