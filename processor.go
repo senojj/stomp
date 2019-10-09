@@ -96,11 +96,17 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 							fn, has := subscriptions.Get(id)
 
 							if has {
+								var wg sync.WaitGroup
 								message := Message{
 									Header(frame.Header),
-									frame.Body,
+									&waitGroupReadCloser{
+										reader: frame.Body,
+										wg: &wg,
+									},
 								}
-								fn(message)
+								wg.Add(1)
+								go fn(message)
+								wg.Wait()
 							}
 						}
 					}

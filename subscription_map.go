@@ -3,11 +3,11 @@ package stomp
 import "sync"
 
 type subscriptionMap struct {
-	m   map[string]chan<- Message
+	m   map[string]func(Message)
 	mut sync.RWMutex
 }
 
-func (sm *subscriptionMap) Get(id string) (chan<- Message, bool) {
+func (sm *subscriptionMap) Get(id string) (func(Message), bool) {
 	sm.mut.RLock()
 	defer sm.mut.RUnlock()
 
@@ -18,12 +18,12 @@ func (sm *subscriptionMap) Get(id string) (chan<- Message, bool) {
 	return fn, ok
 }
 
-func (sm *subscriptionMap) Set(id string, fn chan<- Message) {
+func (sm *subscriptionMap) Set(id string, fn func(Message)) {
 	sm.mut.Lock()
 	defer sm.mut.Unlock()
 
 	if nil == sm.m {
-		sm.m = make(map[string]chan<- Message)
+		sm.m = make(map[string]func(Message))
 	}
 	sm.m[id] = fn
 }
