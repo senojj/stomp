@@ -5,22 +5,20 @@ import (
 	"fmt"
 	"github.com/dynata/stomp/proto"
 	"io"
-	"net"
 	"sync"
 	"time"
 )
 
 type Session struct {
-	Version     string
-	ID          string
-	Server      string
-	connection  net.Conn
-	processor   *processor
-	txHeartBeat int
-	rxHeartBeat int
-	iden        *uint64
-	m           sync.Mutex
-	closed      bool
+	Version       string
+	ID            string
+	Server        string
+	processor     *processor
+	txHeartBeat   int
+	rxHeartBeat   int
+	m             sync.Mutex
+	closed        bool
+	subscriptions subscriptionMap
 }
 
 func (s *Session) String() string {
@@ -54,10 +52,10 @@ func (s *Session) Close() error {
 func (s *Session) sendFrame(ctx context.Context, frame *proto.ClientFrame, args ...interface{}) error {
 	ch := make(chan error, 1)
 
-	req := writeRequest{frame, ch, args}
+	req := request{frame, ch, args}
 
 	select {
-	case s.processor.C <- req:
+	case s.processor.W <- req:
 		select {
 		case result := <-ch:
 			if nil != result {
@@ -109,7 +107,6 @@ func (s *Session) Send(
 func (s *Session) Subscribe(
 	ctx context.Context,
 	destination string,
-	fn func(Message),
 	options ...func(Option),
 ) (*Subscription, error) {
 	if s.closed {
@@ -124,32 +121,45 @@ func (s *Session) Subscribe(
 	frame.Header.Set(proto.HdrId, id)
 	frame.Header.Set(proto.HdrDestination, destination)
 
-	sendErr := s.sendFrame(ctx, frame, fn)
+	sendErr := s.sendFrame(ctx, frame)
 
 	if nil != sendErr {
 		return nil, sendErr
 	}
+	subCh := make(chan Message)
+	s.subscriptions.Set(id, subCh)
 
 	return &Subscription{
 		id:      id,
 		session: s,
+		C:       subCh,
 	}, nil
 }
 
 type Subscription struct {
 	id      string
 	session *Session
+	C       <-chan Message
 }
 
-func (s *Subscription) Unsubscribe(ctx context.Context, options ...func(Option)) error {
+func (s *Subscription) Unsubscribe(ctx context.Context) error {
 	if s.session.closed {
 		return ErrSessionClosed
 	}
 	frame := proto.NewFrame(proto.CmdUnsubscribe, nil)
 
-	for _, option := range options {
-		option(Option(frame.Header))
-	}
 	frame.Header.Set(proto.HdrId, s.id)
-	return s.session.sendFrame(ctx, frame)
+	frame.Header.Set(proto.HdrReceipt, nextId())
+	sndErr := s.session.sendFrame(ctx, frame)
+
+	if nil != sndErr {
+		return sndErr
+	}
+	ch, has := s.session.subscriptions.Get(s.id)
+
+	if has {
+		s.session.subscriptions.Del(s.id)
+		close(ch)
+	}
+	return nil
 }

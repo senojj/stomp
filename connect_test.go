@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -102,7 +101,7 @@ func TestSession_Send2(t *testing.T) {
 			"/queue/a.test",
 			content,
 			WithContentType("text/plain"),
-			WithReceipt("send-" + strconv.Itoa(i)),
+			WithReceipt(),
 		)
 		cancel()
 
@@ -135,28 +134,33 @@ func TestSession_Subscribe(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
-	subscription, subErr := session.Subscribe(ctx, "/queue/a.test", func(message Message) {
-		body, rdErr := ioutil.ReadAll(message.Body)
-		closeErr := message.Body.Close()
-
-		if nil != rdErr {
-			t.Fatal(rdErr)
-		}
-
-		if nil != closeErr {
-			t.Fatal(closeErr)
-		}
-		t.Logf("received message - %s\n", string(body))
-	})
+	subscription, subErr := session.Subscribe(ctx, "/queue/a.test")
 	cancel()
 
 	if nil != subErr {
 		t.Fatal(subErr)
 	}
+
+	go func() {
+		for message := range subscription.C {
+			body, rdErr := ioutil.ReadAll(message.Body)
+			closeErr := message.Body.Close()
+
+			if nil != rdErr {
+				t.Fatal(rdErr)
+			}
+
+			if nil != closeErr {
+				t.Fatal(closeErr)
+			}
+			t.Logf("received message - %s\n", string(body))
+		}
+	}()
+
 	t.Logf("successfully subscribed...")
 	time.Sleep(5*time.Second)
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	unsubErr := subscription.Unsubscribe(ctx, WithReceipt("1AB2C3"))
+	unsubErr := subscription.Unsubscribe(ctx)
 	cancel()
 
 	if nil != unsubErr {

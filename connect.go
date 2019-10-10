@@ -80,11 +80,20 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 		Version:     version,
 		ID:          sessionId,
 		Server:      server,
-		connection:  c,
 		txHeartBeat: tx,
 		rxHeartBeat: rx,
 		processor:   proc,
 	}
+
+	go func() {
+		for p := range proc.R {
+			ch, has := session.subscriptions.Get(p.ID)
+
+			if has {
+				ch <- p.Message
+			}
+		}
+	}()
 	return &session, nil
 }
 

@@ -10,14 +10,20 @@ import (
 	"time"
 )
 
-type writeRequest struct {
+type request struct {
 	Frame *proto.ClientFrame
 	C     chan<- error
 	Args  []interface{}
 }
 
+type packet struct {
+	ID      string
+	Message Message
+}
+
 type processor struct {
-	C    chan<- writeRequest
+	W    chan<- request
+	R    <-chan packet
 	done chan struct{}
 	wg   sync.WaitGroup
 }
@@ -32,10 +38,10 @@ func (p *processor) Close() error {
 }
 
 func process(writer io.Writer, reader *proto.FrameReader) *processor {
-	ch := make(chan writeRequest)
+	writeCh := make(chan request)
+	readCh := make(chan packet)
 	done := make(chan struct{}, 1)
 	var receipts receiptMap
-	var subscriptions subscriptionMap
 	ticker := time.NewTicker(time.Nanosecond)
 	var wg sync.WaitGroup
 	frameWriter := proto.NewFrameWriter(writer)
@@ -93,22 +99,22 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						id, ok := frame.Header.Get(proto.HdrSubscription)
 
 						if ok {
-							fn, has := subscriptions.Get(id)
+							var wg sync.WaitGroup
 
-							if has {
-								var wg sync.WaitGroup
-
-								message := Message{
-									Header(frame.Header),
-									&waitGroupReadCloser{
-										reader: frame.Body,
-										wg: &wg,
-									},
-								}
-								wg.Add(1)
-								go fn(message)
-								wg.Wait()
+							message := Message{
+								Header(frame.Header),
+								&waitGroupReadCloser{
+									reader: frame.Body,
+									wg:     &wg,
+								},
 							}
+							wg.Add(1)
+							packet := packet{
+								ID:      id,
+								Message: message,
+							}
+							readCh <- packet
+							wg.Wait()
 						}
 					}
 					closeErr := frame.Body.Close()
@@ -120,6 +126,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 			case <-done:
 				done <- struct{}{}
 				ticker.Stop()
+				close(readCh)
 				break loop
 			}
 		}
@@ -132,27 +139,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 	loop:
 		for {
 			select {
-			case wr := <-ch:
-				switch wr.Frame.Command {
-				case proto.CmdSubscribe:
-					id, ok := wr.Frame.Header.Get(proto.HdrId)
-
-					if ok {
-						if len(wr.Args) > 0 {
-							v, ok := wr.Args[0].(func(Message))
-
-							if ok {
-								subscriptions.Set(id, v)
-							}
-						}
-					}
-				case proto.CmdUnsubscribe:
-					id, ok := wr.Frame.Header.Get(proto.HdrId)
-
-					if ok {
-						subscriptions.Del(id)
-					}
-				}
+			case wr := <-writeCh:
 				id, ok := wr.Frame.Header.Get(proto.HdrReceipt)
 
 				if ok {
@@ -167,5 +154,5 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 		}
 	}()
 
-	return &processor{C: ch, done: done}
+	return &processor{W: writeCh, R: readCh, done: done}
 }

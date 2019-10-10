@@ -30,8 +30,8 @@ func WithContentType(typ string) func(Option) {
 	}
 }
 
-func WithReceipt(id string) func(Option) {
+func WithReceipt() func(Option) {
 	return func(option Option) {
-		option.Set(proto.HdrReceipt, id)
+		option.Set(proto.HdrReceipt, nextId())
 	}
 }
