@@ -179,8 +179,6 @@ func (s *Session) Nack(ctx context.Context, msg Message, options ...func(Option)
 func (s *Session) Begin(ctx context.Context, options ...func(Option)) (*Transaction, error) {
 	frame := proto.NewFrame(proto.CmdBegin, nil)
 
-	beginErr := s.sendFrame(ctx, frame)
-
 	for _, option := range options {
 		option(Option(frame.Header))
 	}
@@ -191,6 +189,8 @@ func (s *Session) Begin(ctx context.Context, options ...func(Option)) (*Transact
 		trnId = nextId()
 		frame.Header.Set(proto.HdrTransaction, trnId)
 	}
+
+	beginErr := s.sendFrame(ctx, frame)
 
 	if nil != beginErr {
 		return nil, beginErr
@@ -237,14 +237,16 @@ type Subscription struct {
 	C       <-chan Message
 }
 
-func (s *Subscription) Unsubscribe(ctx context.Context) error {
+func (s *Subscription) Unsubscribe(ctx context.Context, options ...func(Option)) error {
 	if s.session.closed {
 		return ErrSessionClosed
 	}
 	frame := proto.NewFrame(proto.CmdUnsubscribe, nil)
 
+	for _, option := range options {
+		option(Option(frame.Header))
+	}
 	frame.Header.Set(proto.HdrId, s.id)
-	frame.Header.Set(proto.HdrReceipt, nextId())
 	sndErr := s.session.sendFrame(ctx, frame)
 
 	if nil != sndErr {

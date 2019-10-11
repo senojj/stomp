@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -161,7 +162,7 @@ func TestSession_Subscribe(t *testing.T) {
 	t.Logf("successfully subscribed...")
 	time.Sleep(5*time.Second)
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	unsubErr := subscription.Unsubscribe(ctx)
+	unsubErr := subscription.Unsubscribe(ctx, WithReceipt())
 	cancel()
 
 	if nil != unsubErr {
@@ -226,11 +227,93 @@ func TestSession_SendSubscribe(t *testing.T) {
 		}
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	unsubErr := subscription.Unsubscribe(ctx)
+	unsubErr := subscription.Unsubscribe(ctx, WithReceipt())
 	cancel()
 
 	if nil != unsubErr {
 		t.Fatal(unsubErr)
+	}
+	clsErr := session.Close()
+
+	if nil != clsErr {
+		t.Fatal(clsErr)
+	}
+}
+
+func TestSession_Begin(t *testing.T) {
+	conn, dialErr := tls.Dial("tcp", os.Getenv("MQ_URI"), nil)
+
+	if nil != dialErr {
+		t.Fatal(dialErr)
+	}
+	session, connErr := Connect(
+		conn,
+		WithCredentials("mixr", os.Getenv("MQ_PASSWORD")),
+	)
+
+	if nil != connErr {
+		t.Fatal(connErr)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	transaction, trnErr := session.Begin(ctx, WithReceipt())
+	cancel()
+
+	if nil != trnErr {
+		t.Fatal(trnErr)
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	subscription, subErr := session.Subscribe(ctx, "/queue/a.test", WithAck(AckClientIndividual), WithReceipt())
+	cancel()
+
+	if nil != subErr {
+		t.Fatal(subErr)
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		for message := range subscription.C {
+			closeErr := message.Body.Close()
+
+			if nil != closeErr {
+				t.Fatal(closeErr)
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				ackErr := session.Ack(ctx, message, WithTransaction(transaction))
+				cancel()
+
+				if nil != ackErr {
+					t.Error(ackErr)
+				}
+			}()
+		}
+		wg.Done()
+	}()
+
+	time.Sleep(10*time.Second)
+
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	unsubErr := subscription.Unsubscribe(ctx, WithReceipt())
+	cancel()
+
+	if nil != unsubErr {
+		t.Fatal(unsubErr)
+	}
+
+	wg.Wait()
+
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	abrtErr := transaction.Commit(ctx, WithReceipt())
+	cancel()
+
+	if nil != abrtErr {
+		t.Fatal(abrtErr)
 	}
 	clsErr := session.Close()
 

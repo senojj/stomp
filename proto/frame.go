@@ -21,6 +21,10 @@ type ClientFrame struct {
 	Body    io.Reader
 }
 
+func (cf *ClientFrame) String() string {
+	return fmt.Sprintf("{Command: %s, Header: %v}", cf.Command, cf.Header)
+}
+
 func NewFrame(command Command, body io.Reader) *ClientFrame {
 	return &ClientFrame{
 		Command: command,

@@ -60,7 +60,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 					log.Println(rdErr)
 					break loop
 				}
-
+				fmt.Printf("read <- %s\n", frame)
 				if nil != frame {
 					switch frame.Command {
 					case proto.CmdReceipt:
@@ -145,6 +145,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 				if ok {
 					receipts.Set(id, wr.C)
 				}
+				fmt.Printf("write -> %s\n", wr.Frame.String())
 				_, wrErr := frameWriter.Write(wr.Frame)
 				wr.C <- wrErr
 			case <-done:

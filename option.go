@@ -41,3 +41,9 @@ func WithTransaction(trn *Transaction) func(Option) {
 		option.Set(proto.HdrTransaction, trn.id)
 	}
 }
+
+func WithAck(ack string) func(Option) {
+	return func(option Option) {
+		option.Set(proto.HdrAck, ack)
+	}
+}
