@@ -91,6 +91,8 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 
 			if has {
 				ch <- p.Message
+			} else {
+				p.Message.Body.Close()
 			}
 		}
 	}()

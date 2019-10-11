@@ -113,6 +113,7 @@ func (s *Session) Subscribe(
 		return nil, ErrSessionClosed
 	}
 	frame := proto.NewFrame(proto.CmdSubscribe, nil)
+	frame.Header.Set(proto.HdrAck, AckAuto)
 
 	for _, option := range options {
 		option(Option(frame.Header))
