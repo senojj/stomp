@@ -35,3 +35,9 @@ func WithReceipt() func(Option) {
 		option.Set(proto.HdrReceipt, nextId())
 	}
 }
+
+func WithTransaction(trn *Transaction) func(Option) {
+	return func(option Option) {
+		option.Set(proto.HdrTransaction, trn.id)
+	}
+}

@@ -104,6 +104,100 @@ func (s *Session) Send(
 	return s.sendFrame(ctx, frame)
 }
 
+func (s *Session) Ack(ctx context.Context, msg Message, options ...func(Option)) error {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	if s.closed {
+		return ErrSessionClosed
+	}
+
+	frame := proto.NewFrame(proto.CmdAck, nil)
+
+	for _, option := range options {
+		option(Option(frame.Header))
+	}
+
+	switch s.Version {
+	case v12:
+		ack, ok := msg.Header.Get(proto.HdrAck)
+
+		if ok {
+			frame.Header.Set(proto.HdrId, ack)
+		}
+	case v10, v11:
+		subId, ok := msg.Header.Get(proto.HdrSubscription)
+
+		if ok {
+			frame.Header.Set(proto.HdrSubscription, subId)
+		}
+		msgId, ok := msg.Header.Get(proto.HdrMessageId)
+
+		if ok {
+			frame.Header.Set(proto.HdrMessageId, msgId)
+		}
+	}
+	return s.sendFrame(ctx, frame)
+}
+
+func (s *Session) Nack(ctx context.Context, msg Message, options ...func(Option)) error {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	if s.closed {
+		return ErrSessionClosed
+	}
+
+	frame := proto.NewFrame(proto.CmdNack, nil)
+
+	for _, option := range options {
+		option(Option(frame.Header))
+	}
+
+	switch s.Version {
+	case v12:
+		ack, ok := msg.Header.Get(proto.HdrAck)
+
+		if ok {
+			frame.Header.Set(proto.HdrId, ack)
+		}
+	case v10, v11:
+		subId, ok := msg.Header.Get(proto.HdrSubscription)
+
+		if ok {
+			frame.Header.Set(proto.HdrSubscription, subId)
+		}
+		msgId, ok := msg.Header.Get(proto.HdrMessageId)
+
+		if ok {
+			frame.Header.Set(proto.HdrMessageId, msgId)
+		}
+	}
+	return s.sendFrame(ctx, frame)
+}
+
+func (s *Session) Begin(ctx context.Context, options ...func(Option)) (*Transaction, error) {
+	frame := proto.NewFrame(proto.CmdBegin, nil)
+
+	beginErr := s.sendFrame(ctx, frame)
+
+	for _, option := range options {
+		option(Option(frame.Header))
+	}
+
+	trnId, ok := frame.Header.Get(proto.HdrTransaction)
+
+	if !ok {
+		trnId = nextId()
+		frame.Header.Set(proto.HdrTransaction, trnId)
+	}
+
+	if nil != beginErr {
+		return nil, beginErr
+	}
+	return &Transaction{trnId, s}, nil
+}
+
 func (s *Session) Subscribe(
 	ctx context.Context,
 	destination string,
