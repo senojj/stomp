@@ -28,9 +28,9 @@ var frameTests = []frameTest{
 		Frame{
 			Command: CmdSend,
 			Header: Header{
-				"content-length": {"17"},
-				"content-type":   {"text/plain"},
-				"destination":    {"/queue/test"},
+				HdrContentLength: {"17"},
+				HdrContentType:   {"text/plain"},
+				HdrDestination:   {"/queue/test"},
 			},
 		},
 
@@ -48,14 +48,29 @@ var frameTests = []frameTest{
 		Frame{
 			Command: CmdMessage,
 			Header: Header{
-				"subscription": {"0"},
-				"message-id":   {"007"},
-				"destination":  {"/queue/test"},
-				"content-type": {"text/plain"},
+				HdrSubscription: {"0"},
+				HdrMessageId:    {"007"},
+				HdrDestination:  {"/queue/test"},
+				HdrContentType:  {"text/plain"},
 			},
 		},
 
 		"hello queue test",
+	},
+	{
+		"RECEIPT\n" +
+			"receipt-id:message-12345\n" +
+			"\n" +
+			"\x00",
+
+		Frame{
+			Command: CmdReceipt,
+			Header: Header{
+				HdrReceiptId: {"message-12345"},
+			},
+		},
+
+		"",
 	},
 }
 
