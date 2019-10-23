@@ -2,29 +2,84 @@ package frame
 
 import (
 	"bytes"
-	"io/ioutil"
+	"fmt"
+	"go/token"
+	"io"
+	"reflect"
+	"strings"
 	"testing"
 )
 
-const someTestContent = "some test content"
-const frameData = "SEND\ncontent-length:17\n\nsome test content\x00"
+type frameTest struct {
+	Raw   string
+	Frame Frame
+	Body  string
+}
 
-func TestFrame_WriteTo(t *testing.T) {
-	in := bytes.NewBufferString(someTestContent)
+var frameTests = []frameTest{
+	{
+		"SEND\n" +
+			"content-length:17\n" +
+			"destination:/queue/test\n" +
+			"\n" +
+			"some test content\x00",
 
-	frame := New(CmdSend, in)
-	var out bytes.Buffer
-	wrtErr := frame.Write(&out)
+			Frame{
+				Command: CmdSend,
+				Header: Header{
+					"content-length": {"17"},
+					"destination": {"/queue/test"},
+				},
+			},
 
-	if nil != wrtErr {
-		t.Error(wrtErr)
+			"some test content",
+	},
+}
+
+func TestReadFrame(t *testing.T) {
+	for i, tt := range frameTests {
+		f, readErr := Read(strings.NewReader(tt.Raw))
+
+		if nil != readErr {
+			t.Errorf("#%d: %v", i, readErr)
+		}
+		fbody := f.Body
+		f.Body = nil
+		diff(t, fmt.Sprintf("#%d Frame", i), f, &tt.Frame)
+		var bout bytes.Buffer
+
+		if nil != fbody {
+			_, copyErr := io.Copy(&bout, fbody)
+
+			if nil != copyErr {
+				t.Errorf("#%d: %v", i, copyErr)
+				continue
+			}
+			fbody.Close()
+		}
+		body := bout.String()
+
+		if body != tt.Body {
+			t.Errorf("#%d: Body = %q want %q", i, body, tt.Body)
+		}
 	}
-	data, rdErr := ioutil.ReadAll(&out)
+}
 
-	if nil != rdErr {
-		t.Error(rdErr)
+func diff(t *testing.T, prefix string, have, want interface{}) {
+	hv := reflect.ValueOf(have).Elem()
+	wv := reflect.ValueOf(want).Elem()
+	if hv.Type() != wv.Type() {
+		t.Errorf("%s: type mismatch %v want %v", prefix, hv.Type(), wv.Type())
 	}
-	if string(data) != frameData {
-		t.Errorf("data does not match.\nexpected:\n%s\ngot:\n%s", frameData, string(data))
+	for i := 0; i < hv.NumField(); i++ {
+		name := hv.Type().Field(i).Name
+		if !token.IsExported(name) {
+			continue
+		}
+		hf := hv.Field(i).Interface()
+		wf := wv.Field(i).Interface()
+		if !reflect.DeepEqual(hf, wf) {
+			t.Errorf("%s: %s = %v want %v", prefix, name, hf, wf)
+		}
 	}
 }
