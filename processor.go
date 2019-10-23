@@ -59,7 +59,7 @@ func process(rw io.ReadWriter) *processor {
 					log.Println(rdErr)
 					break loop
 				}
-				fmt.Printf("read <- %s\n", f)
+
 				if nil != f {
 					switch f.Command {
 					case frame.CmdReceipt:

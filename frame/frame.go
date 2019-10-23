@@ -27,19 +27,22 @@ func New(command Command, body io.Reader) *Frame {
 		header.Set(HdrContentLength, strconv.FormatInt(length, 10))
 	}
 
-	readCloser, ok := body.(io.ReadCloser)
+	var b io.ReadCloser
 
-	if ok {
-		return &Frame{
-			Command: command,
-			Header:  header,
-			Body:    readCloser,
+	if nil != body {
+		readCloser, ok := body.(io.ReadCloser)
+
+		if ok {
+			b = readCloser
+		} else {
+			b = ioutil.NopCloser(body)
 		}
 	}
+
 	return &Frame{
 		Command: command,
 		Header: header,
-		Body: ioutil.NopCloser(body),
+		Body: b,
 	}
 }
 
