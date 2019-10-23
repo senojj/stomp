@@ -2,7 +2,7 @@ package stomp
 
 import (
 	"fmt"
-	"github.com/dynata/stomp/proto"
+	"github.com/dynata/stomp/frame"
 	"io"
 	"io/ioutil"
 	"log"
@@ -11,7 +11,7 @@ import (
 )
 
 type request struct {
-	Frame *proto.ClientFrame
+	Frame *frame.Frame
 	C     chan<- error
 	Args  []interface{}
 }
@@ -37,14 +37,13 @@ func (p *processor) Close() error {
 	return nil
 }
 
-func process(writer io.Writer, reader *proto.FrameReader) *processor {
+func process(rw io.ReadWriter) *processor {
 	writeCh := make(chan request)
 	readCh := make(chan packet)
 	done := make(chan struct{}, 1)
 	var receipts receiptMap
 	ticker := time.NewTicker(time.Nanosecond)
 	var wg sync.WaitGroup
-	frameWriter := proto.NewFrameWriter(writer)
 
 	go func() {
 		wg.Add(1)
@@ -54,17 +53,17 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 		for {
 			select {
 			case <-ticker.C:
-				frame, rdErr := reader.Read()
+				f, rdErr := frame.Read(rw)
 
 				if nil != rdErr {
 					log.Println(rdErr)
 					break loop
 				}
-				fmt.Printf("read <- %s\n", frame)
-				if nil != frame {
-					switch frame.Command {
-					case proto.CmdReceipt:
-						id, ok := frame.Header.Get(proto.HdrReceiptId)
+				fmt.Printf("read <- %s\n", f)
+				if nil != f {
+					switch f.Command {
+					case frame.CmdReceipt:
+						id, ok := f.Header.Get(frame.HdrReceiptId)
 
 						if ok {
 							rch, has := receipts.Get(id)
@@ -76,9 +75,9 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						} else {
 							log.Printf("error: stomp: unknown receipt-id: %s", id)
 						}
-					case proto.CmdError:
-						id, ok := frame.Header.Get(proto.HdrReceiptId)
-						content, rdErr := ioutil.ReadAll(frame.Body)
+					case frame.CmdError:
+						id, ok := f.Header.Get(frame.HdrReceiptId)
+						content, rdErr := ioutil.ReadAll(f.Body)
 
 						if nil != rdErr {
 							log.Println(rdErr)
@@ -95,16 +94,16 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 						} else {
 							log.Printf(string(content))
 						}
-					case proto.CmdMessage:
-						id, ok := frame.Header.Get(proto.HdrSubscription)
+					case frame.CmdMessage:
+						id, ok := f.Header.Get(frame.HdrSubscription)
 
 						if ok {
 							var wg sync.WaitGroup
 
 							message := Message{
-								Header(frame.Header),
+								Header(f.Header),
 								&waitGroupReadCloser{
-									reader: frame.Body,
+									reader: f.Body,
 									wg:     &wg,
 								},
 							}
@@ -117,7 +116,7 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 							wg.Wait()
 						}
 					}
-					closeErr := frame.Body.Close()
+					closeErr := f.Body.Close()
 
 					if nil != closeErr {
 						log.Printf("error: stomp: closing frame: %v", closeErr)
@@ -140,13 +139,12 @@ func process(writer io.Writer, reader *proto.FrameReader) *processor {
 		for {
 			select {
 			case wr := <-writeCh:
-				id, ok := wr.Frame.Header.Get(proto.HdrReceipt)
+				id, ok := wr.Frame.Header.Get(frame.HdrReceipt)
 
 				if ok {
 					receipts.Set(id, wr.C)
 				}
-				fmt.Printf("write -> %s\n", wr.Frame.String())
-				_, wrErr := frameWriter.Write(wr.Frame)
+				wrErr := wr.Frame.Write(rw)
 				wr.C <- wrErr
 			case <-done:
 				done <- struct{}{}

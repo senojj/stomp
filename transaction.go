@@ -2,7 +2,7 @@ package stomp
 
 import (
 	"context"
-	"github.com/dynata/stomp/proto"
+	"github.com/dynata/stomp/frame"
 )
 
 type Transaction struct {
@@ -11,21 +11,21 @@ type Transaction struct {
 }
 
 func (t *Transaction) Commit(ctx context.Context, options ...func(Option)) error {
-	frame := proto.NewFrame(proto.CmdCommit, nil)
+	f := frame.New(frame.CmdCommit, nil)
 
 	for _, option := range options {
-		option(Option(frame.Header))
+		option(Option(f.Header))
 	}
-	frame.Header.Set(proto.HdrTransaction, t.id)
-	return t.session.sendFrame(ctx, frame)
+	f.Header.Set(frame.HdrTransaction, t.id)
+	return t.session.sendFrame(ctx, f)
 }
 
 func (t *Transaction) Abort(ctx context.Context, options ...func(Option)) error {
-	frame := proto.NewFrame(proto.CmdAbort, nil)
+	f := frame.New(frame.CmdAbort, nil)
 
 	for _, option := range options {
-		option(Option(frame.Header))
+		option(Option(f.Header))
 	}
-	frame.Header.Set(proto.HdrTransaction, t.id)
-	return t.session.sendFrame(ctx, frame)
+	f.Header.Set(frame.HdrTransaction, t.id)
+	return t.session.sendFrame(ctx, f)
 }

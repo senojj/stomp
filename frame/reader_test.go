@@ -1,4 +1,4 @@
-package proto
+package frame
 
 import (
 	"bytes"
@@ -38,7 +38,7 @@ func readAllSized(r io.Reader, size int) ([]byte, error) {
 
 func TestDelimitedReader_Read(t *testing.T) {
 	r := strings.NewReader(terminatedTestContent)
-	dr := DelimitReader(r, byteNull)
+	dr := delimitReader(r, byteNull)
 	read, rdErr := readAllSized(dr, 1)
 
 	if nil != rdErr && rdErr != io.EOF {
@@ -53,7 +53,7 @@ func TestDelimitedReader_Read(t *testing.T) {
 
 func TestDelimitedReader_Read2(t *testing.T) {
 	r := strings.NewReader(completeTestContent)
-	dr := DelimitReader(r, byteNull)
+	dr := delimitReader(r, byteNull)
 	read, rdErr := readAllSized(dr, 1)
 
 	if nil != rdErr && rdErr != io.EOF {
@@ -70,16 +70,15 @@ func TestFrameReader_Read(t *testing.T) {
 	var frames bytes.Buffer
 	var bdyConn bytes.Buffer
 	_, bdyConnWrtErr := bdyConn.WriteString(terminatedTestContent)
-	frameWriter := NewFrameWriter(&frames)
 
 	if nil != bdyConnWrtErr {
 		t.Fatal(bdyConnWrtErr)
 	}
-	frmConn := NewFrame(CmdConnect, &bdyConn)
+	frmConn := New(CmdConnect, &bdyConn)
 	frmConn.Header.Append(HdrLogin, "hello")
 	frmConn.Header.Append(HdrPasscode, "world")
 
-	_, frmWrtErr := frameWriter.Write(frmConn)
+	frmWrtErr := frmConn.Write(&frames)
 
 	if nil != frmWrtErr {
 		t.Fatal(frmWrtErr)
@@ -90,15 +89,14 @@ func TestFrameReader_Read(t *testing.T) {
 	if nil != bdySendWrtErr {
 		t.Fatal(bdySendWrtErr)
 	}
-	frmSend := NewFrame(CmdSend, &bdySend)
-	_, frmWrtErr = frameWriter.Write(frmSend)
+	frmSend := New(CmdSend, &bdySend)
+	frmWrtErr = frmSend.Write(&frames)
 
 	if nil != frmWrtErr {
 		t.Fatal(frmWrtErr)
 	}
-	frmReader := NewFrameReader(&frames)
 
-	frm1, frmRdErr := frmReader.Read()
+	frm1, frmRdErr := Read(&frames)
 
 	if nil != frmRdErr {
 		t.Fatal(frmRdErr)
@@ -120,7 +118,7 @@ func TestFrameReader_Read(t *testing.T) {
 		t.Fatalf("wrong frame body. expected %s, got %s", terminatedTestContent, bdyConnStr)
 	}
 
-	frm2, frm2RdErr := frmReader.Read()
+	frm2, frm2RdErr := Read(&frames)
 
 	if nil != frm2RdErr {
 		t.Fatal(frm2RdErr)

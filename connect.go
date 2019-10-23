@@ -2,7 +2,7 @@ package stomp
 
 import (
 	"fmt"
-	"github.com/dynata/stomp/proto"
+	"github.com/dynata/stomp/frame"
 	"io/ioutil"
 	"net"
 	"strconv"
@@ -15,31 +15,29 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 	if nil != splitErr {
 		return nil, splitErr
 	}
-	frame := proto.NewFrame(proto.CmdConnect, nil)
+	f := frame.New(frame.CmdConnect, nil)
 
-	frame.Header.Set(proto.HdrHost, host)
-	frame.Header.Set(proto.HdrAcceptVersion, "1.1,1.2")
-	frame.Header.Set(proto.HdrHeartBeat, "0,0")
+	f.Header.Set(frame.HdrHost, host)
+	f.Header.Set(frame.HdrAcceptVersion, "1.1,1.2")
+	f.Header.Set(frame.HdrHeartBeat, "0,0")
 
 	for _, option := range options {
-		option(Option(frame.Header))
+		option(Option(f.Header))
 	}
-	frameWriter := proto.NewFrameWriter(c)
-	_, frameWrtErr := frameWriter.Write(frame)
+	frameWrtErr := f.Write(c)
 
 	if nil != frameWrtErr {
 		return nil, frameWrtErr
 	}
-	frameReader := proto.NewFrameReader(c)
 
-	respFrame, frameRdErr := frameReader.Read()
+	respFrame, frameRdErr := frame.Read(c)
 
 	if nil != frameRdErr {
 		return nil, frameRdErr
 	}
 
-	if respFrame.Command == proto.CmdError {
-		contentType, ok := respFrame.Header.Get(proto.HdrContentType)
+	if respFrame.Command == frame.CmdError {
+		contentType, ok := respFrame.Header.Get(frame.HdrContentType)
 		var err error
 
 		if ok && contentType == "text/plain" {
@@ -56,14 +54,14 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 		return nil, err
 	}
 
-	if respFrame.Command != proto.CmdConnected {
-		return nil, fmt.Errorf("unexpected frame command. expected %s, got %s", proto.CmdConnected, respFrame.Command)
+	if respFrame.Command != frame.CmdConnected {
+		return nil, fmt.Errorf("unexpected frame command. expected %s, got %s", frame.CmdConnected, respFrame.Command)
 	}
-	version, _ := respFrame.Header.Get(proto.HdrVersion)
-	sessionId, _ := respFrame.Header.Get(proto.HdrSession)
-	server, _ := respFrame.Header.Get(proto.HdrServer)
+	version, _ := respFrame.Header.Get(frame.HdrVersion)
+	sessionId, _ := respFrame.Header.Get(frame.HdrSession)
+	server, _ := respFrame.Header.Get(frame.HdrServer)
 
-	heartBeat, ok := respFrame.Header.Get(proto.HdrHeartBeat)
+	heartBeat, ok := respFrame.Header.Get(frame.HdrHeartBeat)
 
 	if !ok {
 		heartBeat = "0,0"
@@ -74,7 +72,7 @@ func Connect(c net.Conn, options ...func(Option)) (*Session, error) {
 		return nil, hbErr
 	}
 	respFrame.Body.Close()
-	proc := process(c, frameReader)
+	proc := process(c)
 
 	session := Session{
 		Version:     version,

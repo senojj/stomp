@@ -1,4 +1,4 @@
-package proto
+package frame
 
 import (
 	"bytes"
@@ -12,10 +12,9 @@ const frameData = "SEND\ncontent-length:17\n\nsome test content\x00"
 func TestFrame_WriteTo(t *testing.T) {
 	in := bytes.NewBufferString(someTestContent)
 
-	frame := NewFrame(CmdSend, in)
+	frame := New(CmdSend, in)
 	var out bytes.Buffer
-	frameWriter := NewFrameWriter(&out)
-	_, wrtErr := frameWriter.Write(frame)
+	wrtErr := frame.Write(&out)
 
 	if nil != wrtErr {
 		t.Error(wrtErr)

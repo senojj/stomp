@@ -3,7 +3,7 @@ package stomp
 import (
 	"context"
 	"fmt"
-	"github.com/dynata/stomp/proto"
+	"github.com/dynata/stomp/frame"
 	"io"
 	"sync"
 	"time"
@@ -39,20 +39,20 @@ func (s *Session) Close() error {
 	if s.closed {
 		return nil
 	}
-	frame := proto.NewFrame(proto.CmdDisconnect, nil)
-	frame.Header.Set(proto.HdrReceipt, "session-disconnect")
+	f := frame.New(frame.CmdDisconnect, nil)
+	f.Header.Set(frame.HdrReceipt, "session-disconnect")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	sndErr := s.sendFrame(ctx, frame)
+	sndErr := s.sendFrame(ctx, f)
 	cancel()
 	s.processor.Close()
 	s.closed = true
 	return sndErr
 }
 
-func (s *Session) sendFrame(ctx context.Context, frame *proto.ClientFrame, args ...interface{}) error {
+func (s *Session) sendFrame(ctx context.Context, f *frame.Frame, args ...interface{}) error {
 	ch := make(chan error, 1)
 
-	req := request{frame, ch, args}
+	req := request{f, ch, args}
 
 	select {
 	case s.processor.W <- req:
@@ -68,7 +68,7 @@ func (s *Session) sendFrame(ctx context.Context, frame *proto.ClientFrame, args 
 		return ctx.Err()
 	}
 
-	_, ok := frame.Header.Get(proto.HdrReceipt)
+	_, ok := f.Header.Get(frame.HdrReceipt)
 
 	if !ok {
 		return nil
@@ -95,13 +95,13 @@ func (s *Session) Send(
 		return ErrSessionClosed
 	}
 
-	frame := proto.NewFrame(proto.CmdSend, content)
+	f := frame.New(frame.CmdSend, content)
 
 	for _, option := range options {
-		option(Option(frame.Header))
+		option(Option(f.Header))
 	}
-	frame.Header.Set(proto.HdrDestination, destination)
-	return s.sendFrame(ctx, frame)
+	f.Header.Set(frame.HdrDestination, destination)
+	return s.sendFrame(ctx, f)
 }
 
 func (s *Session) Ack(ctx context.Context, msg Message, options ...func(Option)) error {
@@ -112,32 +112,32 @@ func (s *Session) Ack(ctx context.Context, msg Message, options ...func(Option))
 		return ErrSessionClosed
 	}
 
-	frame := proto.NewFrame(proto.CmdAck, nil)
+	f := frame.New(frame.CmdAck, nil)
 
 	for _, option := range options {
-		option(Option(frame.Header))
+		option(Option(f.Header))
 	}
 
 	switch s.Version {
 	case v12:
-		ack, ok := msg.Header.Get(proto.HdrAck)
+		ack, ok := msg.Header.Get(frame.HdrAck)
 
 		if ok {
-			frame.Header.Set(proto.HdrId, ack)
+			f.Header.Set(frame.HdrId, ack)
 		}
 	case v10, v11:
-		subId, ok := msg.Header.Get(proto.HdrSubscription)
+		subId, ok := msg.Header.Get(frame.HdrSubscription)
 
 		if ok {
-			frame.Header.Set(proto.HdrSubscription, subId)
+			f.Header.Set(frame.HdrSubscription, subId)
 		}
-		msgId, ok := msg.Header.Get(proto.HdrMessageId)
+		msgId, ok := msg.Header.Get(frame.HdrMessageId)
 
 		if ok {
-			frame.Header.Set(proto.HdrMessageId, msgId)
+			f.Header.Set(frame.HdrMessageId, msgId)
 		}
 	}
-	return s.sendFrame(ctx, frame)
+	return s.sendFrame(ctx, f)
 }
 
 func (s *Session) Nack(ctx context.Context, msg Message, options ...func(Option)) error {
@@ -148,49 +148,49 @@ func (s *Session) Nack(ctx context.Context, msg Message, options ...func(Option)
 		return ErrSessionClosed
 	}
 
-	frame := proto.NewFrame(proto.CmdNack, nil)
+	f := frame.New(frame.CmdNack, nil)
 
 	for _, option := range options {
-		option(Option(frame.Header))
+		option(Option(f.Header))
 	}
 
 	switch s.Version {
 	case v12:
-		ack, ok := msg.Header.Get(proto.HdrAck)
+		ack, ok := msg.Header.Get(frame.HdrAck)
 
 		if ok {
-			frame.Header.Set(proto.HdrId, ack)
+			f.Header.Set(frame.HdrId, ack)
 		}
 	case v10, v11:
-		subId, ok := msg.Header.Get(proto.HdrSubscription)
+		subId, ok := msg.Header.Get(frame.HdrSubscription)
 
 		if ok {
-			frame.Header.Set(proto.HdrSubscription, subId)
+			f.Header.Set(frame.HdrSubscription, subId)
 		}
-		msgId, ok := msg.Header.Get(proto.HdrMessageId)
+		msgId, ok := msg.Header.Get(frame.HdrMessageId)
 
 		if ok {
-			frame.Header.Set(proto.HdrMessageId, msgId)
+			f.Header.Set(frame.HdrMessageId, msgId)
 		}
 	}
-	return s.sendFrame(ctx, frame)
+	return s.sendFrame(ctx, f)
 }
 
 func (s *Session) Begin(ctx context.Context, options ...func(Option)) (*Transaction, error) {
-	frame := proto.NewFrame(proto.CmdBegin, nil)
+	f := frame.New(frame.CmdBegin, nil)
 
 	for _, option := range options {
-		option(Option(frame.Header))
+		option(Option(f.Header))
 	}
 
-	trnId, ok := frame.Header.Get(proto.HdrTransaction)
+	trnId, ok := f.Header.Get(frame.HdrTransaction)
 
 	if !ok {
 		trnId = nextId()
-		frame.Header.Set(proto.HdrTransaction, trnId)
+		f.Header.Set(frame.HdrTransaction, trnId)
 	}
 
-	beginErr := s.sendFrame(ctx, frame)
+	beginErr := s.sendFrame(ctx, f)
 
 	if nil != beginErr {
 		return nil, beginErr
@@ -206,17 +206,17 @@ func (s *Session) Subscribe(
 	if s.closed {
 		return nil, ErrSessionClosed
 	}
-	frame := proto.NewFrame(proto.CmdSubscribe, nil)
-	frame.Header.Set(proto.HdrAck, AckAuto)
+	f := frame.New(frame.CmdSubscribe, nil)
+	f.Header.Set(frame.HdrAck, AckAuto)
 
 	for _, option := range options {
-		option(Option(frame.Header))
+		option(Option(f.Header))
 	}
 	id := nextId()
-	frame.Header.Set(proto.HdrId, id)
-	frame.Header.Set(proto.HdrDestination, destination)
+	f.Header.Set(frame.HdrId, id)
+	f.Header.Set(frame.HdrDestination, destination)
 
-	sendErr := s.sendFrame(ctx, frame)
+	sendErr := s.sendFrame(ctx, f)
 
 	if nil != sendErr {
 		return nil, sendErr
@@ -241,13 +241,13 @@ func (s *Subscription) Unsubscribe(ctx context.Context, options ...func(Option))
 	if s.session.closed {
 		return ErrSessionClosed
 	}
-	frame := proto.NewFrame(proto.CmdUnsubscribe, nil)
+	f := frame.New(frame.CmdUnsubscribe, nil)
 
 	for _, option := range options {
-		option(Option(frame.Header))
+		option(Option(f.Header))
 	}
-	frame.Header.Set(proto.HdrId, s.id)
-	sndErr := s.session.sendFrame(ctx, frame)
+	f.Header.Set(frame.HdrId, s.id)
+	sndErr := s.session.sendFrame(ctx, f)
 
 	if nil != sndErr {
 		return sndErr

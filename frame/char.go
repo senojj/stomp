@@ -1,4 +1,4 @@
-package proto
+package frame
 
 const (
 	charNull           = "\x00"

@@ -1,11 +1,11 @@
 package stomp
 
 import (
-	"github.com/dynata/stomp/proto"
+	"github.com/dynata/stomp/frame"
 	"strconv"
 )
 
-type Option proto.Header
+type Option frame.Header
 
 func (o Option) Set(name string, value ...string) {
 	o[name] = value
@@ -13,37 +13,37 @@ func (o Option) Set(name string, value ...string) {
 
 func WithCredentials(login, passcode string) func(Option) {
 	return func(option Option) {
-		option.Set(proto.HdrLogin, login)
-		option.Set(proto.HdrPasscode, passcode)
+		option.Set(frame.HdrLogin, login)
+		option.Set(frame.HdrPasscode, passcode)
 	}
 }
 
 func WithHeartBeat(tx, rx int) func(Option) {
 	return func(option Option) {
-		option.Set(proto.HdrHeartBeat, strconv.Itoa(tx)+","+strconv.Itoa(rx))
+		option.Set(frame.HdrHeartBeat, strconv.Itoa(tx)+","+strconv.Itoa(rx))
 	}
 }
 
 func WithContentType(typ string) func(Option) {
 	return func(option Option) {
-		option.Set(proto.HdrContentType, typ)
+		option.Set(frame.HdrContentType, typ)
 	}
 }
 
 func WithReceipt() func(Option) {
 	return func(option Option) {
-		option.Set(proto.HdrReceipt, nextId())
+		option.Set(frame.HdrReceipt, nextId())
 	}
 }
 
 func WithTransaction(trn *Transaction) func(Option) {
 	return func(option Option) {
-		option.Set(proto.HdrTransaction, trn.id)
+		option.Set(frame.HdrTransaction, trn.id)
 	}
 }
 
 func WithAck(ack string) func(Option) {
 	return func(option Option) {
-		option.Set(proto.HdrAck, ack)
+		option.Set(frame.HdrAck, ack)
 	}
 }
