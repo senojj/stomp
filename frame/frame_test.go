@@ -72,6 +72,46 @@ var frameTests = []frameTest{
 
 		"",
 	},
+	{
+		"ERROR\n" +
+			"receipt-id:message-12345\n" +
+			"content-type:text/plain\n" +
+			"content-length:171\n" +
+			"message: malformed frame received\n" +
+			"\n" +
+			"The message:\n" +
+			"-----\n" +
+			"MESSAGE\n" +
+			"destined:/queue/a\n" +
+			"receipt:message-12345\n" +
+			"\n" +
+			"Hello queue a!\n" +
+			"-----\n" +
+			"Did not contain a destination header, which is REQUIRED\n" +
+			"for message propagation.\n" +
+			"\x00",
+
+		Frame{
+			Command: CmdError,
+			Header: Header{
+				HdrReceiptId:     {"message-12345"},
+				HdrContentType:   {"text/plain"},
+				HdrContentLength: {"171"},
+				HdrMessage:       {" malformed frame received"},
+			},
+		},
+
+		"The message:\n" +
+			"-----\n" +
+			"MESSAGE\n" +
+			"destined:/queue/a\n" +
+			"receipt:message-12345\n" +
+			"\n" +
+			"Hello queue a!\n" +
+			"-----\n" +
+			"Did not contain a destination header, which is REQUIRED\n" +
+			"for message propagation.\n",
+	},
 }
 
 func TestReadFrame(t *testing.T) {
