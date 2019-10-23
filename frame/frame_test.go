@@ -20,19 +20,42 @@ var frameTests = []frameTest{
 	{
 		"SEND\n" +
 			"content-length:17\n" +
+			"content-type:text/plain\n" +
 			"destination:/queue/test\n" +
 			"\n" +
 			"some test content\x00",
 
-			Frame{
-				Command: CmdSend,
-				Header: Header{
-					"content-length": {"17"},
-					"destination": {"/queue/test"},
-				},
+		Frame{
+			Command: CmdSend,
+			Header: Header{
+				"content-length": {"17"},
+				"content-type":   {"text/plain"},
+				"destination":    {"/queue/test"},
 			},
+		},
 
-			"some test content",
+		"some test content",
+	},
+	{
+		"MESSAGE\n" +
+			"subscription:0\n" +
+			"message-id:007\n" +
+			"destination:/queue/test\n" +
+			"content-type:text/plain\n" +
+			"\n" +
+			"hello queue test\x00",
+
+		Frame{
+			Command: CmdMessage,
+			Header: Header{
+				"subscription": {"0"},
+				"message-id":   {"007"},
+				"destination":  {"/queue/test"},
+				"content-type": {"text/plain"},
+			},
+		},
+
+		"hello queue test",
 	},
 }
 
@@ -61,6 +84,24 @@ func TestReadFrame(t *testing.T) {
 
 		if body != tt.Body {
 			t.Errorf("#%d: Body = %q want %q", i, body, tt.Body)
+		}
+	}
+}
+
+func TestWriteFrame(t *testing.T) {
+	for i, tt := range frameTests {
+		f, readErr := Read(strings.NewReader(tt.Raw))
+
+		if nil != readErr {
+			t.Errorf("#%d: %v", i, readErr)
+			continue
+		}
+		var buf bytes.Buffer
+		writeErr := f.Write(&buf)
+
+		if nil != writeErr {
+			t.Errorf("#%d: %v", i, writeErr)
+			continue
 		}
 	}
 }
