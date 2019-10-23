@@ -212,19 +212,18 @@ func (d *delimitedReader) Read(p []byte) (int, error) {
 		if read < 0 {
 			return 0, fmt.Errorf("negative read")
 		}
-		totalRead += read
 
 		if read > 0 {
-			p[i] = buf[0]
-
 			if buf[0] == d.delimiter {
 				d.done = true
-				return i, io.EOF
+				return totalRead, io.EOF
 			}
+			totalRead += read
+			p[i] = buf[0]
 		}
 
 		if nil != rdErr {
-			return i, rdErr
+			return totalRead, rdErr
 		}
 	}
 	return totalRead, nil
