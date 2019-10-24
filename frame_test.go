@@ -1,4 +1,4 @@
-package frame
+package stomp
 
 import (
 	"bytes"
@@ -76,7 +76,7 @@ var frameTests = []frameTest{
 		"ERROR\n" +
 			"receipt-id:message-12345\n" +
 			"content-type:text/plain\n" +
-			"content-length:171\n" +
+			"content-length:170\n" +
 			"message: malformed frame received\n" +
 			"\n" +
 			"The message:\n" +
@@ -96,7 +96,7 @@ var frameTests = []frameTest{
 			Header: Header{
 				HdrReceiptId:     {"message-12345"},
 				HdrContentType:   {"text/plain"},
-				HdrContentLength: {"171"},
+				HdrContentLength: {"170"},
 				HdrMessage:       {" malformed frame received"},
 			},
 		},
@@ -116,7 +116,7 @@ var frameTests = []frameTest{
 
 func TestReadFrame(t *testing.T) {
 	for i, tt := range frameTests {
-		f, readErr := Read(strings.NewReader(tt.Raw))
+		f, readErr := ReadFrame(strings.NewReader(tt.Raw))
 
 		if nil != readErr {
 			t.Errorf("#%d: %v", i, readErr)
@@ -145,7 +145,7 @@ func TestReadFrame(t *testing.T) {
 
 func TestWriteFrame(t *testing.T) {
 	for i, tt := range frameTests {
-		f, readErr := Read(strings.NewReader(tt.Raw))
+		f, readErr := ReadFrame(strings.NewReader(tt.Raw))
 
 		if nil != readErr {
 			t.Errorf("#%d: %v", i, readErr)

@@ -1,4 +1,4 @@
-package frame
+package stomp
 
 import (
 	"bufio"
@@ -19,7 +19,7 @@ type Frame struct {
 	Body    io.ReadCloser
 }
 
-func New(command Command, body io.Reader) *Frame {
+func NewFrame(command Command, body io.Reader) *Frame {
 	header := make(Header)
 	length := calculateContentLength(body)
 
@@ -128,7 +128,7 @@ func (f *Frame) Write(w io.Writer) error {
 	return nil
 }
 
-// Read will read an entire frame from r. The frame command line
+// ReadFrame will read an entire frame from r. The frame command line
 // and header lines are restricted to specified sizes to guard
 // against malicious frame writes. The frame body is left unread on
 // the stream, and can be read up until either the content length
@@ -137,7 +137,7 @@ func (f *Frame) Write(w io.Writer) error {
 // order to remove the frame's contents from the stream prior to the
 // next read. A return value of (nil, nil) indicates that a heart-beat
 // was likely received.
-func Read(r io.Reader) (*Frame, error) {
+func ReadFrame(r io.Reader) (*Frame, error) {
 	nullTerminatedReader := delimitReader(r, byteNull)
 	command, cmdRdErr := readCommand(nullTerminatedReader)
 

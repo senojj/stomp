@@ -2,15 +2,12 @@ package stomp
 
 import (
 	"bytes"
-	"context"
 	"crypto/tls"
-	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 )
 
 func TestConnect(t *testing.T) {
@@ -19,305 +16,86 @@ func TestConnect(t *testing.T) {
 	if nil != dialErr {
 		t.Fatal(dialErr)
 	}
-	session, connErr := Connect(
-		conn,
-		WithCredentials("mixr", os.Getenv("MQ_PASSWORD")),
-		WithHeartBeat(0, 1000),
-	)
+
+	f := NewFrame(CmdConnect, nil)
+	f.Header.Set(HdrLogin, "mixr")
+	f.Header.Set(HdrPasscode, os.Getenv("MQ_PASSWORD"))
+
+	connErr := f.Write(conn)
 
 	if nil != connErr {
 		t.Fatal(connErr)
 	}
-	clsErr := session.Close()
 
-	if nil != clsErr {
-		t.Fatal(clsErr)
+	f, readErr := read(conn)
+
+	if nil != readErr {
+		t.Fatal(readErr)
 	}
+	var buf bytes.Buffer
+
+	writeErr := f.Write(&buf)
+
+	if nil != writeErr {
+		t.Fatal(writeErr)
+	}
+	t.Log(buf.String())
+
+	_, discardErr := buf.WriteTo(ioutil.Discard)
+
+	if nil != discardErr {
+		t.Fatal(discardErr)
+	}
+
+	f = NewFrame(CmdSend, strings.NewReader("hello there"))
+	f.Header.Set(HdrDestination, "/queue/a.test")
+
+	sendErr := f.Write(conn)
+
+	if nil != sendErr {
+		t.Fatal(sendErr)
+	}
+
+	f = NewFrame(CmdSubscribe, nil)
+	f.Header.Set(HdrId, "12345")
+	f.Header.Set(HdrDestination, "/queue/a.test")
+
+	subscribeErr := f.Write(conn)
+
+	if nil != subscribeErr {
+		t.Fatal(subscribeErr)
+	}
+
+	f, readErr = read(conn)
+
+	if nil != readErr {
+		t.Fatal(readErr)
+	}
+
+	writeErr = f.Write(&buf)
+
+	if nil != writeErr {
+		t.Fatal(writeErr)
+	}
+	t.Log(buf.String())
+
+	_, discardErr = buf.WriteTo(ioutil.Discard)
+
+	if nil != discardErr {
+		t.Fatal(discardErr)
+	}
+	conn.Close()
 }
 
-func TestSession_Send1(t *testing.T) {
-	conn, dialErr := tls.Dial("tcp", os.Getenv("MQ_URI"), nil)
+func read(r io.Reader) (*Frame, error) {
+	f, readErr := ReadFrame(r)
 
-	if nil != dialErr {
-		t.Fatal(dialErr)
-	}
-	session, connErr := Connect(
-		conn,
-		WithCredentials("mixr", os.Getenv("MQ_PASSWORD")),
-		WithHeartBeat(0, 5000),
-	)
-
-	if nil != connErr {
-		t.Fatal(connErr)
-	}
-	const sends = 50000
-	start := time.Now()
-	for i := 0; i < sends; i++ {
-		content := strings.NewReader("hello, from Stomp")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-		sendErr := session.Send(
-			ctx,
-			"/queue/a.test",
-			content,
-			WithContentType("text/plain"),
-		)
-		cancel()
-
-		if nil != sendErr {
-			t.Fatal(sendErr)
-		}
-	}
-	elapsed := int64(time.Since(start) / time.Second)
-	clsErr := session.Close()
-
-	if nil != clsErr {
-		fmt.Println(clsErr)
-	}
-	fmt.Printf("rate %ds\n", int64(float64(sends)/float64(elapsed)))
-}
-
-func TestSession_Send2(t *testing.T) {
-	conn, dialErr := tls.Dial("tcp", os.Getenv("MQ_URI"), nil)
-
-	if nil != dialErr {
-		t.Fatal(dialErr)
-	}
-	session, connErr := Connect(
-		conn,
-		WithCredentials("mixr", os.Getenv("MQ_PASSWORD")),
-		WithHeartBeat(0, 5000),
-	)
-
-	if nil != connErr {
-		t.Fatal(connErr)
-	}
-	const sends = 500
-	start := time.Now()
-	for i := 0; i < sends; i++ {
-		content := strings.NewReader("hello, from Stomp")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-		sendErr := session.Send(
-			ctx,
-			"/queue/a.test",
-			content,
-			WithContentType("text/plain"),
-			WithReceipt(),
-		)
-		cancel()
-
-		if nil != sendErr {
-			t.Error(sendErr)
-		}
-	}
-	elapsed := int64(time.Since(start) / time.Second)
-	clsErr := session.Close()
-
-	if nil != clsErr {
-		fmt.Println(clsErr)
-	}
-	fmt.Printf("rate %ds\n", int64(float64(sends)/float64(elapsed)))
-}
-
-func TestSession_Subscribe(t *testing.T) {
-	conn, dialErr := tls.Dial("tcp", os.Getenv("MQ_URI"), nil)
-
-	if nil != dialErr {
-		t.Fatal(dialErr)
-	}
-	session, connErr := Connect(
-		conn,
-		WithCredentials("mixr", os.Getenv("MQ_PASSWORD")),
-	)
-
-	if nil != connErr {
-		t.Fatal(connErr)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	subscription, subErr := session.Subscribe(ctx, "/queue/a.test")
-	cancel()
-
-	if nil != subErr {
-		t.Fatal(subErr)
+	if nil != readErr {
+		return nil, readErr
 	}
 
-	go func() {
-		for message := range subscription.C {
-			body, rdErr := ioutil.ReadAll(message.Body)
-			closeErr := message.Body.Close()
-
-			if nil != rdErr {
-				t.Fatal(rdErr)
-			}
-
-			if nil != closeErr {
-				t.Fatal(closeErr)
-			}
-			t.Logf("received message - %s\n", string(body))
-		}
-	}()
-
-	t.Logf("successfully subscribed...")
-	time.Sleep(5*time.Second)
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	unsubErr := subscription.Unsubscribe(ctx, WithReceipt())
-	cancel()
-
-	if nil != unsubErr {
-		t.Fatal(unsubErr)
+	if nil == f {
+		return read(r)
 	}
-	clsErr := session.Close()
-
-	if nil != clsErr {
-		t.Fatal(clsErr)
-	}
-}
-
-func TestSession_SendSubscribe(t *testing.T) {
-	conn, dialErr := tls.Dial("tcp", os.Getenv("MQ_URI"), nil)
-
-	if nil != dialErr {
-		t.Fatal(dialErr)
-	}
-	session, connErr := Connect(
-		conn,
-		WithCredentials("mixr", os.Getenv("MQ_PASSWORD")),
-	)
-
-	if nil != connErr {
-		t.Fatal(connErr)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	subscription, subErr := session.Subscribe(ctx, "/queue/a.test")
-	cancel()
-
-	if nil != subErr {
-		t.Fatal(subErr)
-	}
-
-	go func() {
-		for message := range subscription.C {
-			body, rdErr := ioutil.ReadAll(message.Body)
-			closeErr := message.Body.Close()
-
-			if nil != rdErr {
-				t.Fatal(rdErr)
-			}
-
-			if nil != closeErr {
-				t.Fatal(closeErr)
-			}
-			t.Logf("received message - %s\n", string(body))
-		}
-	}()
-
-	start := time.Now().Add(5*time.Second)
-
-	for time.Now().Before(start) {
-		content := bytes.NewReader([]byte("hello, from stomp"))
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		sndErr := session.Send(ctx, "/queue/a.test", content)
-		cancel()
-
-		if nil != sndErr {
-			t.Fatal(sndErr)
-		}
-	}
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	unsubErr := subscription.Unsubscribe(ctx, WithReceipt())
-	cancel()
-
-	if nil != unsubErr {
-		t.Fatal(unsubErr)
-	}
-	clsErr := session.Close()
-
-	if nil != clsErr {
-		t.Fatal(clsErr)
-	}
-}
-
-func TestSession_Begin(t *testing.T) {
-	conn, dialErr := tls.Dial("tcp", os.Getenv("MQ_URI"), nil)
-
-	if nil != dialErr {
-		t.Fatal(dialErr)
-	}
-	session, connErr := Connect(
-		conn,
-		WithCredentials("mixr", os.Getenv("MQ_PASSWORD")),
-	)
-
-	if nil != connErr {
-		t.Fatal(connErr)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	transaction, trnErr := session.Begin(ctx, WithReceipt())
-	cancel()
-
-	if nil != trnErr {
-		t.Fatal(trnErr)
-	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	subscription, subErr := session.Subscribe(ctx, "/queue/a.test", WithAck(AckClientIndividual), WithReceipt())
-	cancel()
-
-	if nil != subErr {
-		t.Fatal(subErr)
-	}
-
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		for message := range subscription.C {
-			closeErr := message.Body.Close()
-
-			if nil != closeErr {
-				t.Fatal(closeErr)
-			}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				ackErr := session.Ack(ctx, message, WithTransaction(transaction))
-				cancel()
-
-				if nil != ackErr {
-					t.Error(ackErr)
-				}
-			}()
-		}
-		wg.Done()
-	}()
-
-	time.Sleep(10*time.Second)
-
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	unsubErr := subscription.Unsubscribe(ctx, WithReceipt())
-	cancel()
-
-	if nil != unsubErr {
-		t.Fatal(unsubErr)
-	}
-
-	wg.Wait()
-
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	abrtErr := transaction.Commit(ctx, WithReceipt())
-	cancel()
-
-	if nil != abrtErr {
-		t.Fatal(abrtErr)
-	}
-	clsErr := session.Close()
-
-	if nil != clsErr {
-		t.Fatal(clsErr)
-	}
+	return f, nil
 }

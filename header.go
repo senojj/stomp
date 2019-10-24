@@ -1,4 +1,4 @@
-package frame
+package stomp
 
 import (
 	"strings"
