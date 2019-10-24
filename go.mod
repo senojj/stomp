@@ -1,3 +1,3 @@
-module github.com/dynata/stomp
+module github.com/jjware/stomp
 
 go 1.13
