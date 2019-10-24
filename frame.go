@@ -13,12 +13,28 @@ const (
 	defaultMaxHeaderBytes = 1 << 20 // 1 MB
 )
 
+// A Frame represents a STOMP frame received or sent by
+// a server or client.
 type Frame struct {
+	// Command specifies the STOMP command.
 	Command Command
+
+	// Header contains the request header fields.
 	Header  Header
+
+	// Body is the frame's body. A nil body means the frame
+	// has no body. A frame resulting from a ReadFrame must
+	// have its body closed explicitly. Also, a frame resulting
+	// from a ReadFrame will always have a non-nil body, but
+	// will return an io.EOF immediately when read.
 	Body    io.ReadCloser
 }
 
+// NewFrame returns a new Frame given a command, and an optional
+// body. If the provided body is also an io.Closer, the returned
+// Frame.Body is set to body, otherwise body will be wrapped in
+// an ioutil.NopCloser. If body is also a measurer, the content-
+// type header will be pre-populated for the frame.
 func NewFrame(command Command, body io.Reader) *Frame {
 	header := make(Header)
 	length := calculateContentLength(body)
@@ -46,10 +62,16 @@ func NewFrame(command Command, body io.Reader) *Frame {
 	}
 }
 
+// The measurer interface wraps the basic Len method.
+// Len returns the number of bytes of the unread portion of the
+// underlying type.
 type measurer interface {
 	Len() int
 }
 
+// calculateContentLength returns the length, in bytes, of r
+// if the value of r satisfies the measurer interface. If r
+// is not measurable, -1 is returned. If r is nil, 0 is returned.
 func calculateContentLength(r io.Reader) int64 {
 	if nil != r {
 		if v, ok := r.(measurer); ok {
@@ -60,6 +82,9 @@ func calculateContentLength(r io.Reader) int64 {
 	return 0
 }
 
+// writeHeader writes the header portion of the STOMP frame. The header
+// name and value are encoded according to STOMP the specification.
+// writeHeader returns the total bytes written or an error, if encountered.
 func writeHeader(header Header, writer io.Writer) (int, error) {
 	var written = 0
 
@@ -76,6 +101,9 @@ func writeHeader(header Header, writer io.Writer) (int, error) {
 	return written, nil
 }
 
+// Write writes a STOMP frame, which is the command, header, and body,
+// in wire format. If Body is present, Write closes Body once it
+// has been written in full.
 func (f *Frame) Write(w io.Writer) error {
 	var bw *bufio.Writer
 	_, ok := w.(io.ByteWriter)
@@ -175,10 +203,13 @@ func ReadFrame(r io.Reader) (*Frame, error) {
 	}, nil
 }
 
+// drainingCloser satisfies the io.ReadCloser interface.
 type drainingCloser struct {
 	io.Reader
 }
 
+// Close will drain the remaining bytes to be read from
+// the internal reader to devNull.
 func (d *drainingCloser) Close() error {
 	_, err := io.Copy(ioutil.Discard, d)
 
@@ -188,10 +219,13 @@ func (d *drainingCloser) Close() error {
 	return nil
 }
 
+// drainCloser creates a new drainingCloser, wrapping
+// the given reader r.
 func drainCloser(r io.Reader) io.ReadCloser {
 	return &drainingCloser{r}
 }
 
+// delimitedReader satisfies the io.Reader interface.
 type delimitedReader struct {
 	delimiter byte
 	reader    io.Reader
@@ -199,6 +233,11 @@ type delimitedReader struct {
 	done      bool
 }
 
+// Read reads up to len(p) bytes into p from the internal
+// buffer until the delimiter or io.EOF has been reached.
+// If the delimiter is reached, successive calls to Read
+// will result in an io.EOF. The delimiter is not written
+// into p.
 func (d *delimitedReader) Read(p []byte) (int, error) {
 	if d.done {
 		return 0, io.EOF
@@ -229,6 +268,8 @@ func (d *delimitedReader) Read(p []byte) (int, error) {
 	return totalRead, nil
 }
 
+// delimitReader creates a new delimitedReader instance given an
+// io.Reader and a byte delimiter.
 func delimitReader(r io.Reader, delimiter byte) *delimitedReader {
 	return &delimitedReader{
 		delimiter: delimiter,
@@ -236,6 +277,8 @@ func delimitReader(r io.Reader, delimiter byte) *delimitedReader {
 	}
 }
 
+// stripCarriageReturn removes an existing
+// carriage return from the end of a byte slice.
 func stripCarriageReturn(b []byte) []byte {
 	ndx := bytes.LastIndexByte(b, byteCarriageReturn)
 
@@ -245,6 +288,12 @@ func stripCarriageReturn(b []byte) []byte {
 	return b[:ndx]
 }
 
+// readCommand reads a frame's command line from the
+// provided io.Reader. The command line will be read
+// until a new line character is encountered, 1024 bytes
+// have been read, or an io.EOF is encountered. If a
+// carriage return exists at the end of the command line,
+// it will be stripped.
 func readCommand(r io.Reader) (Command, error) {
 	cmdReader := io.LimitReader(r, 1024)
 	cmdLineReader := delimitReader(cmdReader, byteNewLine)
@@ -262,6 +311,12 @@ func readCommand(r io.Reader) (Command, error) {
 	return Command(cmdLine), nil
 }
 
+// readHeader reads a frame's header from the provided io.Reader.
+// Each header line will be read until a new line character is
+// encountered, defaultMaxHeaderBytes has been read, or an io.EOF
+// is encountered. Each header line will have an existing carriage
+// return stripped. Each header line will have its name and value
+// decoded according to the STOMP specification.
 func readHeader(r io.Reader) (Header, error) {
 	header := make(Header)
 	hdrReader := io.LimitReader(r, defaultMaxHeaderBytes)
