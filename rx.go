@@ -2,16 +2,15 @@ package stomp
 
 import (
 	"io"
-	"sync"
 	"time"
 )
 
-type rx struct {
+type Rx struct {
 	C    <-chan *Frame
 	done chan struct{}
 }
 
-func newRx(r io.Reader, err chan<- error) *rx {
+func newRx(r io.Reader, err chan<- error) *Rx {
 	ch := make(chan *Frame)
 	done := make(chan struct{}, 1)
 
@@ -27,15 +26,10 @@ func newRx(r io.Reader, err chan<- error) *rx {
 				if nil != readErr {
 					err <- readErr
 				}
-				var wg sync.WaitGroup
-
-				wrc := waitingReadCloser{
-					reader: f.Body,
-					wg: &wg,
-				}
-				f.Body = &wrc
+				wrc := newWaitingReadCloser(f.Body)
+				f.Body = wrc
 				ch <- f
-				wg.Wait()
+				wrc.wait()
 			case <-done:
 				break loop
 			}
@@ -43,10 +37,10 @@ func newRx(r io.Reader, err chan<- error) *rx {
 		ticker.Stop()
 		close(ch)
 	}()
-	return &rx{C: ch, done: done}
+	return &Rx{C: ch, done: done}
 }
 
-func (x *rx) stop() {
+func (x *Rx) stop() {
 	select {
 	case x.done <- struct{}{}:
 	default:

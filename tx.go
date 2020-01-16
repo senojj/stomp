@@ -2,12 +2,12 @@ package stomp
 
 import "io"
 
-type tx struct {
+type Tx struct {
 	C    chan<- *Frame
 	done chan struct{}
 }
 
-func newTx(w io.Writer, err chan<- error) *tx {
+func newTx(w io.Writer, err chan<- error) *Tx {
 	ch := make(chan *Frame)
 	done := make(chan struct{}, 1)
 
@@ -27,10 +27,10 @@ func newTx(w io.Writer, err chan<- error) *tx {
 		}
 		close(ch)
 	}()
-	return &tx{C: ch, done: done}
+	return &Tx{C: ch, done: done}
 }
 
-func (x *tx) stop() {
+func (x *Tx) stop() {
 	select {
 	case x.done <- struct{}{}:
 	default:
