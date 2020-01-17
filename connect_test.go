@@ -2,26 +2,30 @@ package stomp
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestConnect(t *testing.T) {
-	conn, dialErr := tls.Dial("tcp", os.Getenv("MQ_URI"), nil)
+	dialer := net.Dialer{Timeout: 5*time.Second}
+	conn, dialErr := tls.DialWithDialer(&dialer, "tcp", os.Getenv("MQ_URI"), nil)
 
 	if nil != dialErr {
 		t.Fatal(dialErr)
 	}
+	trns := NewTransport(conn)
 
-	f := NewFrame(CmdConnect, nil)
-	f.Header.Set(HdrLogin, "mixr")
-	f.Header.Set(HdrPasscode, os.Getenv("MQ_PASSWORD"))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
-	connErr := f.Write(conn)
+	connErr := ConnectWithContext(ctx, trns, "abcd", "abcd")
+	cancel()
 
 	if nil != connErr {
 		t.Fatal(connErr)
