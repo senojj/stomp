@@ -25,6 +25,11 @@ func ConnectWithContext(ctx context.Context, t *Transport, username, password st
 	if nil != readErr {
 		return readErr
 	}
+	closeErr := resp.Body.Close()
+
+	if nil != closeErr {
+		return closeErr
+	}
 
 	if resp.Command != CmdConnected {
 		message, ok := resp.Header["message"]
@@ -33,11 +38,6 @@ func ConnectWithContext(ctx context.Context, t *Transport, username, password st
 			return errors.New(strings.Join(message, ":"))
 		}
 		return errors.New("unknown error")
-	}
-	closeErr := resp.Body.Close()
-
-	if nil != closeErr {
-		return closeErr
 	}
 	return nil
 }
