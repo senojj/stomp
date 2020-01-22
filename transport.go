@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+var bytesNewLine = []byte{byteNewLine}
+
 type rxpkg struct {
 	frame *Frame
 	err   error
@@ -77,7 +79,13 @@ func newTx(w io.Writer) tx {
 		for {
 			select {
 			case p := <-ch:
-				writeErr := p.frame.Write(w)
+				var writeErr error
+
+				if nil == p.frame {
+					_, writeErr = w.Write(bytesNewLine)
+				} else {
+					writeErr = p.frame.Write(w)
+				}
 				p.err <- writeErr
 			case <-done:
 				break loop
