@@ -109,8 +109,6 @@ func (x tx) stop() {
 type Handle struct {
 	tx  tx
 	rx  rx
-	seq Sequence
-	sub map[string]chan *Frame
 }
 
 func Bind(rw io.ReadWriter) *Handle {
