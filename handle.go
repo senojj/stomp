@@ -40,6 +40,8 @@ func newRx(r io.Reader) rx {
 					f.Body = wrc
 					ch <- rxpkg{f, nil}
 					wrc.wait()
+				} else {
+					ch <- rxpkg{nil, nil}
 				}
 			case <-done:
 				break loop
@@ -104,19 +106,21 @@ func (x tx) stop() {
 	}
 }
 
-type Transport struct {
-	tx tx
-	rx rx
+type Handle struct {
+	tx  tx
+	rx  rx
+	seq Sequence
+	sub map[string]chan *Frame
 }
 
-func NewTransport(rw io.ReadWriter) *Transport {
-	return &Transport{
+func Bind(rw io.ReadWriter) *Handle {
+	return &Handle{
 		tx: newTx(rw),
 		rx: newRx(rw),
 	}
 }
 
-func (s *Transport) Send(ctx context.Context, frame *Frame) error {
+func (s *Handle) Send(ctx context.Context, frame *Frame) error {
 	chErr := make(chan error, 1)
 
 	s.tx.c <- txpkg{frame, chErr}
@@ -133,7 +137,7 @@ func (s *Transport) Send(ctx context.Context, frame *Frame) error {
 	return nil
 }
 
-func (s *Transport) Read(ctx context.Context) (*Frame, error) {
+func (s *Handle) Read(ctx context.Context) (*Frame, error) {
 	select {
 	case p := <-s.rx.c:
 		return p.frame, p.err

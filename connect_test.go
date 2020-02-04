@@ -20,7 +20,7 @@ func TestConnect(t *testing.T) {
 	if nil != dialErr {
 		t.Fatal(dialErr)
 	}
-	trns := NewTransport(conn)
+	trns := Bind(conn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 

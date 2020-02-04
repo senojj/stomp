@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-func Connect(t *Transport, username, password string) error {
+func Connect(t *Handle, username, password string) error {
 	return ConnectWithContext(context.Background(), t, username, password)
 }
 
-func ConnectWithContext(ctx context.Context, t *Transport, username, password string) error {
+func ConnectWithContext(ctx context.Context, t *Handle, username, password string) error {
 	f := NewFrame(CmdConnect, nil)
 	f.Header.Set(HdrLogin, username)
 	f.Header.Set(HdrPasscode, password)
