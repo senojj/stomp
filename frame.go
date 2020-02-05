@@ -106,9 +106,8 @@ func writeHeader(header Header, writer io.Writer) (int, error) {
 // has been written in full.
 func (f *Frame) Write(w io.Writer) error {
 	var bw *bufio.Writer
-	_, ok := w.(io.ByteWriter)
 
-	if !ok {
+	if _, ok := w.(io.ByteWriter); !ok {
 		bw = bufio.NewWriter(w)
 		w = bw
 	}

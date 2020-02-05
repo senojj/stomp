@@ -1,105 +1,135 @@
 package stomp
 
 import (
-	"bytes"
 	"context"
-	"crypto/tls"
+	"errors"
 	"io"
-	"io/ioutil"
 	"net"
-	"os"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestConnect(t *testing.T) {
-	dialer := net.Dialer{Timeout: 5*time.Second}
-	conn, dialErr := tls.DialWithDialer(&dialer, "tcp", os.Getenv("MQ_URI"), nil)
+var errNoConnection = errors.New("connection not yet established")
+var errBadVersion = errors.New("unsupported version")
+var errInvalidLogin = errors.New("invalid login")
+var errInvalidPasscode = errors.New("invalid passcode")
 
-	if nil != dialErr {
-		t.Fatal(dialErr)
-	}
-	trns := Bind(conn)
+func listenConnect(t *testing.T, rw io.ReadWriter) {
+
+	go func() {
+	loop:
+		for {
+			frm, readFrameErr := ReadFrame(rw)
+
+			if nil != readFrameErr {
+
+				if readFrameErr == io.EOF {
+					break loop
+				}
+				t.Fatal(readFrameErr)
+			}
+			closeErr := frm.Body.Close()
+
+			if nil != closeErr {
+				t.Fatal(closeErr)
+			}
+
+			var err error
+
+			if frm.Command != CmdConnect {
+				err = errNoConnection
+			} else {
+				version := "1.0"
+
+				if v, ok := frm.Header.Get(HdrAcceptVersion); ok {
+					versions := strings.Split(v, ",")
+
+					for _, version = range versions {
+
+						if version == "1.1" {
+							break
+						}
+					}
+				}
+
+				if version != "1.1" {
+					err = errBadVersion
+				} else {
+
+					if _, ok := frm.Header.Get(HdrLogin); !ok {
+						err = errInvalidLogin
+					} else {
+
+						if _, ok := frm.Header.Get(HdrPasscode); !ok {
+							err = errInvalidPasscode
+						}
+					}
+				}
+			}
+
+			var frmOut *Frame
+
+			if nil != err {
+				frmOut = NewFrame(CmdError, nil)
+				frmOut.Header.Set(HdrMessage, err.Error())
+
+				if receipt, ok := frm.Header.Get(HdrReceipt); ok {
+					frmOut.Header.Set(HdrReceiptId, receipt)
+				}
+			} else {
+				frmOut = NewFrame(CmdConnected, nil)
+			}
+			frmOut.Header.Set(HdrVersion, "1.1")
+			writeErr := frmOut.Write(rw)
+
+			if nil != writeErr {
+				t.Fatal(writeErr)
+			}
+		}
+	}()
+}
+
+func TestConnect(t *testing.T) {
+	srv, client := net.Pipe()
+	listenConnect(t, srv)
+
+	handle := Bind(client)
+
+	f := NewFrame(CmdConnect, nil)
+	f.Header.Set(HdrLogin, "test-user")
+	f.Header.Set(HdrPasscode, "test-password")
+	f.Header.Set(HdrAcceptVersion, "1.1")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
-	connErr := ConnectWithContext(ctx, trns, "abcd", "abcd")
-	cancel()
-
-	if nil != connErr {
-		t.Fatal(connErr)
-	}
-
-	f, readErr := read(conn)
-
-	if nil != readErr {
-		t.Fatal(readErr)
-	}
-	var buf bytes.Buffer
-
-	writeErr := f.Write(&buf)
-
-	if nil != writeErr {
-		t.Fatal(writeErr)
-	}
-	t.Log(buf.String())
-
-	_, discardErr := buf.WriteTo(ioutil.Discard)
-
-	if nil != discardErr {
-		t.Fatal(discardErr)
-	}
-
-	f = NewFrame(CmdSend, strings.NewReader("hello there"))
-	f.Header.Set(HdrDestination, "/queue/a.test")
-
-	sendErr := f.Write(conn)
+	sendErr := handle.Send(ctx, f)
 
 	if nil != sendErr {
 		t.Fatal(sendErr)
 	}
-
-	f = NewFrame(CmdSubscribe, nil)
-	f.Header.Set(HdrId, "12345")
-	f.Header.Set(HdrDestination, "/queue/a.test")
-
-	subscribeErr := f.Write(conn)
-
-	if nil != subscribeErr {
-		t.Fatal(subscribeErr)
-	}
-
-	f, readErr = read(conn)
+	resp, readErr := handle.Read(ctx)
+	cancel()
 
 	if nil != readErr {
 		t.Fatal(readErr)
 	}
 
-	writeErr = f.Write(&buf)
-
-	if nil != writeErr {
-		t.Fatal(writeErr)
+	if nil == resp {
+		t.Fatal("empty frame")
 	}
-	t.Log(buf.String())
+	closeErr := resp.Body.Close()
 
-	_, discardErr = buf.WriteTo(ioutil.Discard)
-
-	if nil != discardErr {
-		t.Fatal(discardErr)
-	}
-	conn.Close()
-}
-
-func read(r io.Reader) (*Frame, error) {
-	f, readErr := ReadFrame(r)
-
-	if nil != readErr {
-		return nil, readErr
+	if nil != closeErr {
+		t.Fatal(closeErr)
 	}
 
-	if nil == f {
-		return read(r)
+	if resp.Command != CmdConnected {
+		message, ok := resp.Header["message"]
+
+		if ok {
+			t.Fatal(errors.New(strings.Join(message, ":")))
+		}
+		t.Fatal(errors.New("unknown error"))
 	}
-	return f, nil
 }
