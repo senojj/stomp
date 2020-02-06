@@ -1,6 +1,8 @@
 ## Connection Examples
 
 ### Using the Frame API
+The Frame API provides you with everything you need to get started communicating with a stomp
+server.
 ```go
 package main
 
@@ -51,8 +53,7 @@ func main() {
 	// connection established
 }
 ```
-The Frame API provides you with everything you need to get started communicating with a stomp
-server. The stomp connection establishment flow is synchronous, so the code hasn't become
+The stomp connection establishment flow is synchronous, so the code hasn't become
 complicated yet. However, directly writing to and reading from a connection through the Frame
 API is not thread safe. Invoking `Frame::Write` concurrently on the same connection may result in
 malformed frames on the wire. Invoking `stomp.ReadFrame` concurrently on the same connection may
