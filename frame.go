@@ -155,7 +155,7 @@ func (f *Frame) Write(w io.Writer) error {
 	return nil
 }
 
-// ReadFrame will read an entire frame from r. The frame command line
+// ReadFrame will read an entire frame from r. The frame command
 // and header lines are restricted to specified sizes to guard
 // against malicious frame writes. The frame body is left unread on
 // the stream, and can be read up until either the content length

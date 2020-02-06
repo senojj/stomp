@@ -106,11 +106,15 @@ func (x tx) stop() {
 	}
 }
 
+// A Handle provides thead safe methods for reading from
+// and writing to a connection stream.
 type Handle struct {
 	tx  tx
 	rx  rx
 }
 
+// Bind binds a new handle to rw. The handle is available
+// for reading and writing immediately.
 func Bind(rw io.ReadWriter) *Handle {
 	return &Handle{
 		tx: newTx(rw),
@@ -118,6 +122,10 @@ func Bind(rw io.ReadWriter) *Handle {
 	}
 }
 
+// Send sends a frame to the output stream and is thread safe.
+// Send will block until the stream is available for writing.
+// To send a heartbeat to the stream, set the frame argument's
+// value to nil.
 func (s *Handle) Send(ctx context.Context, frame *Frame) error {
 	chErr := make(chan error, 1)
 
@@ -135,6 +143,13 @@ func (s *Handle) Send(ctx context.Context, frame *Frame) error {
 	return nil
 }
 
+// Read reads a frame from the input stream and is thread safe.
+// Read will block until the next frame or heartbeat becomes
+// available on the input stream or an EOF is encountered. If a
+// heartbeat is encountered, both the *Frame and error return
+// values will be nil. If an EOF is encountered, the *Frame
+// return value will be nil, and the error return value will
+// be equal to io.EOF.
 func (s *Handle) Read(ctx context.Context) (*Frame, error) {
 	select {
 	case p := <-s.rx.c:
