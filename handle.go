@@ -159,6 +159,10 @@ func (s *Handle) Read(ctx context.Context) (*Frame, error) {
 	}
 }
 
+// Release will release all of the handle's existing
+// resources. Release will not close the underlying
+// ReadWriter. Calls to Send after calling Release
+// will result in a panic.
 func (s *Handle) Release() {
 	s.tx.stop()
 	s.rx.stop()
