@@ -158,3 +158,8 @@ func (s *Handle) Read(ctx context.Context) (*Frame, error) {
 		return nil, ctx.Err()
 	}
 }
+
+func (s *Handle) Release() {
+	s.tx.stop()
+	s.rx.stop()
+}
