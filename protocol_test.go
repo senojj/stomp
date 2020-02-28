@@ -108,7 +108,7 @@ func TestConnect(t *testing.T) {
 	if nil != sendErr {
 		t.Fatal(sendErr)
 	}
-	resp, readErr := handle.Read(ctx)
+	resp, readErr := handle.Receive(ctx)
 	cancel()
 
 	if nil != readErr {

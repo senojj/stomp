@@ -98,7 +98,7 @@ func main() {
 		log.Fatal(sendErr)
 	}
 
-	frmResponse, readErr := handle.Read(ctx)
+	frmResponse, readErr := handle.Receive(ctx)
 	cancel()
 
 	if readErr != nil {

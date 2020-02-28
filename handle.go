@@ -143,14 +143,14 @@ func (s *Handle) Send(ctx context.Context, frame *Frame) error {
 	return nil
 }
 
-// Read reads a frame from the input stream and is thread safe.
-// Read will block until the next frame or heartbeat becomes
+// Receive reads a frame from the input stream and is thread safe.
+// Receive will block until the next frame or heartbeat becomes
 // available on the input stream or an EOF is encountered. If a
 // heartbeat is encountered, both the *Frame and error return
 // values will be nil. If an EOF is encountered, the *Frame
 // return value will be nil, and the error return value will
 // be equal to io.EOF.
-func (s *Handle) Read(ctx context.Context) (*Frame, error) {
+func (s *Handle) Receive(ctx context.Context) (*Frame, error) {
 	select {
 	case p := <-s.rx.c:
 		return p.frame, p.err
