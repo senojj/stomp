@@ -20,14 +20,14 @@ type Frame struct {
 	Command Command
 
 	// Header contains the request header fields.
-	Header  Header
+	Header Header
 
 	// Body is the frame's body. A nil body means the frame
 	// has no body. A frame resulting from a ReadFrame must
 	// have its body closed explicitly. Also, a frame resulting
 	// from a ReadFrame will always have a non-nil body, but
 	// will return an io.EOF immediately when read.
-	Body    io.ReadCloser
+	Body io.ReadCloser
 }
 
 // NewFrame returns a new Frame given a command, and an optional
@@ -57,8 +57,8 @@ func NewFrame(command Command, body io.Reader) *Frame {
 
 	return &Frame{
 		Command: command,
-		Header: header,
-		Body: b,
+		Header:  header,
+		Body:    b,
 	}
 }
 
@@ -297,17 +297,8 @@ func readCommand(r io.Reader) (Command, error) {
 	cmdReader := io.LimitReader(r, 1024)
 	cmdLineReader := delimitReader(cmdReader, byteNewLine)
 	cmdLine, cmdLineRdErr := ioutil.ReadAll(cmdLineReader)
-
 	cmdLine = stripCarriageReturn(cmdLine)
-
-	if nil != cmdLineRdErr && io.EOF != cmdLineRdErr {
-		return "", cmdLineRdErr
-	}
-
-	if len(cmdLine) == 0 {
-		return "", nil
-	}
-	return Command(cmdLine), nil
+	return Command(cmdLine), cmdLineRdErr
 }
 
 // readHeader reads a frame's header from the provided io.Reader.
