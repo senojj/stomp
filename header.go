@@ -1,6 +1,8 @@
 package stomp
 
 import (
+	"fmt"
+	"io"
 	"strings"
 )
 
@@ -82,4 +84,23 @@ func (m Header) Get(key string) (string, bool) {
 
 func (m Header) Del(key string) {
 	delete(m, key)
+}
+
+// WriteTo writes the header portion of the STOMP frame. The header
+// name and value are encoded according to STOMP the specification.
+// WriteTo returns the total bytes written or an error, if encountered.
+func (m Header) WriteTo(w io.Writer) (int64, error) {
+	var written int64
+
+	for k, v := range m {
+		for _, i := range v {
+			b, wrtErr := fmt.Fprintf(w, "%s:%s\n", encode(k), encode(i))
+
+			if nil != wrtErr {
+				return written, fmt.Errorf("problem writing header: %w", wrtErr)
+			}
+			written += int64(b)
+		}
+	}
+	return written, nil
 }

@@ -82,77 +82,64 @@ func calculateContentLength(r io.Reader) int64 {
 	return 0
 }
 
-// writeHeader writes the header portion of the STOMP frame. The header
-// name and value are encoded according to STOMP the specification.
-// writeHeader returns the total bytes written or an error, if encountered.
-func writeHeader(header Header, writer io.Writer) (int, error) {
-	var written = 0
-
-	for k, v := range header {
-		for _, i := range v {
-			b, wrtErr := fmt.Fprintf(writer, "%s:%s\n", encode(k), encode(i))
-
-			if nil != wrtErr {
-				return written, fmt.Errorf("problem writing header: %w", wrtErr)
-			}
-			written += b
-		}
-	}
-	return written, nil
-}
-
-// Write writes a STOMP frame, which is the command, header, and body,
-// in wire format. If Body is present, Write closes Body once it
+// WriteTo writes a STOMP frame, which is the command, header, and body,
+// in wire format. If Body is present, WriteTo closes Body once it
 // has been written in full.
-func (f *Frame) Write(w io.Writer) error {
+func (f *Frame) WriteTo(w io.Writer) (int64, error) {
 	var bw *bufio.Writer
+	var totalBytesWrt int64
 
 	if _, ok := w.(io.ByteWriter); !ok {
 		bw = bufio.NewWriter(w)
 		w = bw
 	}
 
-	_, cmdWrtErr := fmt.Fprintf(w, "%s\n", f.Command)
+	cmdbyt, cmdWrtErr := fmt.Fprintf(w, "%s\n", f.Command)
 
 	if nil != cmdWrtErr {
-		return cmdWrtErr
+		return totalBytesWrt, cmdWrtErr
 	}
+	totalBytesWrt += int64(cmdbyt)
 
-	_, hdrWrtErr := writeHeader(f.Header, w)
+	hdrbyt, hdrWrtErr := f.Header.WriteTo(w)
 
 	if nil != hdrWrtErr {
-		return hdrWrtErr
+		return totalBytesWrt, hdrWrtErr
 	}
+	totalBytesWrt += hdrbyt
 
-	_, nullWrtErr := w.Write([]byte(charNewLine))
+	nlbyt, nullWrtErr := w.Write([]byte(charNewLine))
 
 	if nil != nullWrtErr {
-		return nullWrtErr
+		return totalBytesWrt, nullWrtErr
 	}
+	totalBytesWrt += int64(nlbyt)
 
 	if nil != f.Body {
-		_, bdyWrtErr := io.Copy(w, f.Body)
+		bodybyt, bdyWrtErr := io.Copy(w, f.Body)
 
 		if nil != bdyWrtErr {
-			return bdyWrtErr
+			return totalBytesWrt, bdyWrtErr
 		}
+		totalBytesWrt += bodybyt
 		closeErr := f.Body.Close()
 
 		if nil != closeErr {
-			return closeErr
+			return totalBytesWrt, closeErr
 		}
 	}
 
-	_, nullWrtErr = w.Write([]byte(charNull))
+	nlbyt, nullWrtErr = w.Write([]byte(charNull))
 
 	if nil != nullWrtErr {
-		return nullWrtErr
+		return totalBytesWrt, nullWrtErr
 	}
+	totalBytesWrt += int64(nlbyt)
 
 	if bw != nil {
-		return bw.Flush()
+		return totalBytesWrt, bw.Flush()
 	}
-	return nil
+	return totalBytesWrt, nil
 }
 
 // ReadFrame will read an entire frame from r. The frame command

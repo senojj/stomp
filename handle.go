@@ -86,7 +86,7 @@ func newTx(w io.Writer) tx {
 				if nil == p.frame {
 					_, writeErr = w.Write(bytesNewLine)
 				} else {
-					writeErr = p.frame.Write(w)
+					_, writeErr = p.frame.WriteTo(w)
 				}
 				p.err <- writeErr
 			case <-done:

@@ -81,7 +81,7 @@ func listenConnect(t *testing.T, rw io.ReadWriter) {
 				frmOut = NewFrame(CmdConnected, nil)
 			}
 			frmOut.Header.Set(HdrVersion, "1.1")
-			writeErr := frmOut.Write(rw)
+			_, writeErr := frmOut.WriteTo(rw)
 
 			if nil != writeErr {
 				t.Fatal(writeErr)

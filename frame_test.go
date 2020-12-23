@@ -152,7 +152,7 @@ func TestWriteFrame(t *testing.T) {
 			continue
 		}
 		var buf bytes.Buffer
-		writeErr := f.Write(&buf)
+		_, writeErr := f.WriteTo(&buf)
 
 		if nil != writeErr {
 			t.Errorf("#%d: %v", i, writeErr)
